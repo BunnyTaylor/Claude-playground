@@ -4,13 +4,14 @@
  * The whole app is static, so we cache the app shell on install and serve it
  * cache-first. Bump CACHE when any shell file changes to roll the update out.
  */
-const CACHE = "mushroom-v1";
+const CACHE = "mushroom-v2";
 const ASSETS = [
   "./",
   "index.html",
   "style.css",
   "crochet-core.js",
   "crochet-viz.js",
+  "registry.js",
   "app.js",
   "manifest.webmanifest",
   "icons/icon-192.png",

@@ -1,28 +1,52 @@
-# Mushroom Dress — crochet pattern generator
+# Crochet Pattern Studio
 
-A made-to-measure crochet pattern generator. It turns your gauge swatches and
-body measurements into a full nine-piece pattern for an amanita-mushroom dress
-(spotted off-shoulder flounce, lantern sleeves, A-line skirt, gill frills) —
-with exact stitch counts, round-by-round instructions, a live preview of the
-finished dress, a row counter, and a yarn estimate.
+A made-to-measure crochet pattern **studio**: a home page of pattern
+collections, and a studio that turns your gauge and measurements into a full
+pattern with exact stitch counts, round-by-round instructions, a live preview,
+a per-piece row counter, a yarn estimate, and PDF export.
+
+The first collection is the **Amanita Mushroom Set** — a spotted off-shoulder
+dress with a matching mushroom-cap bucket hat and drawstring bag, all sized
+from the same gauge, colours and spots so the set matches. It's built as a
+**platform**: new pattern generators are added via a small registry (see
+[Adding a pattern generator](#adding-a-pattern-generator)).
 
 **The engine runs entirely in the browser, so the app is pure static files** —
-no server, no build step, works offline. One engine source (JavaScript) drives
-the web app, the CLI, and the tests, so they can never disagree.
+no server, no build step, works offline (installable PWA). One engine source
+(JavaScript) drives the web app, the CLI, and the tests, so they can never
+disagree.
 
 ```
 web/                    the app — open web/index.html and it just works
-  crochet-core.js       THE engine (single source of truth)
-  crochet-viz.js        the SVG dress visualizer
-  app.js                UI: inputs, render, row counter, projects (localStorage)
+  crochet-core.js       THE engine (dress + hat + bag generators)
+  crochet-viz.js        the SVG visualizers (dress / hat / bag)
+  registry.js           the catalogue of collections & generators (extensibility)
+  app.js                UI: home + studio, inputs, counter, projects (localStorage)
   index.html, style.css
 crochet-cli.mjs         command-line generator (Node) over the same engine
 serve.mjs               tiny static dev server (Node)
 build-artifact.mjs      bundles web/ into one self-contained HTML file
-test/                   the test contract (33 tests, each locking a real bug)
+test/                   the test contract (38 tests, each locking a real bug)
 Dockerfile              self-host on any Docker host (nginx static)
 .github/workflows/      auto-deploy to GitHub Pages on push
 ```
+
+## Adding a pattern generator
+
+The app is data-driven, so a new pattern is three steps:
+
+1. **Engine** — add `computeThing(input)` to `web/crochet-core.js` returning the
+   standard `{ pieces, warnings, meta }` shape (each piece with `counts`,
+   `steps`, and — for the row counter — a `progress` block; set `meta.kind`).
+2. **Preview** — add a `renderThingSvg(...)` branch in `web/crochet-viz.js`,
+   dispatched by `meta.kind` (and, if it needs new inputs, an input-group
+   `<div id="thingInputs">` in `index.html`).
+3. **Register** — add an entry to `web/registry.js` (label, emoji, blurb, the
+   `compute` function name, and which `inputGroups` to show).
+
+That's it — the home-page card, the studio switcher, the form, preview, row
+counter, yarn estimate, PDF, and saved-project handling all read from the
+registry. No other wiring.
 
 ## Use it
 
@@ -37,13 +61,18 @@ npm start                      # http://127.0.0.1:8000  (Node)
 python3 -m http.server -d web  # if you prefer Python
 ```
 
-Set your gauge, measurements, colours and spot sizes; the page shows a **live
-preview of the dress** and the full pattern. It also gives you a **per-piece
-row counter** (tappable, tracks increase rounds, saves progress per project), a
-**yarn estimate**, US/UK terminology, sleeveless/strapless silhouettes, and
-**projects saved in your browser** (localStorage) — save, load, duplicate,
-delete, and export/import all projects as a JSON file to move between devices.
-Nothing leaves your device.
+Pick what to **Make** — a **Dress**, a matching **Hat** (mushroom-cap bucket
+hat with a flared brim and gill frill), or a matching **Bag** (drawstring
+bucket bag). All three share your gauge, colours, and spots, so a whole set
+comes out matching. Set your gauge, measurements, colours and spot sizes and
+the page shows a **live preview** and the full pattern. It also gives you a
+**per-piece row counter** (tappable, tracks increase rounds, saves progress per
+project), a **yarn estimate**, **PDF export** (a clean print layout — cover,
+preview, yarn, then every piece), US/UK terminology, skirt-length presets
+(mini/midi/maxi), sleeveless/strapless silhouettes, and **projects saved in
+your browser** (localStorage) — save, load, duplicate, delete, and
+export/import all projects as a JSON file to move between devices. Nothing
+leaves your device.
 
 It's also an **installable PWA**: on a hosted copy (GitHub Pages / your own
 host) your browser offers "Install app" / "Add to Home Screen," and after the
@@ -160,14 +189,17 @@ everywhere, matching how the counts were originally derived — not JavaScript's
 
 ## What's next
 
-Done: engine, CLI, static web app, dress visualization (with a measurements
-overlay), multi-size spots, in-browser persistence + export/import, per-piece
-row counter, yarn estimate, sleeveless/strapless silhouettes, US/UK terms, and
-three hosting paths (shareable file, GitHub Pages, Docker).
+Done: dress, hat, and bag generators; CLI; static web app; visualizations
+(with a measurements overlay); multi-size spots; in-browser persistence +
+export/import; per-piece row counter; yarn estimate; PDF export; skirt-length
+presets; sleeveless/strapless silhouettes; US/UK terms; installable offline
+PWA; and three hosting paths (shareable file, GitHub Pages, Docker).
 
 Ideas, roughly in value order:
 
-1. **Editable spot layout** — drag spots on the preview, save custom scatters.
-2. **More silhouettes** — tiered skirt, midi/maxi presets, high-neck variant.
-3. **Proper PDF export** (currently the browser's print dialog).
+1. **Accessory viz/CLI parity** — expose hat/bag in the CLI too, add schematic
+   overlays for them.
+2. **Editable spot layout** — drag spots on the preview, save custom scatters.
+3. **More variants** — beret & slouchy beanie hats; cross-body / coin-purse
+   bags; tiered skirt; high-neck dress.
 4. **Photo progress log** per project, alongside the row counter.

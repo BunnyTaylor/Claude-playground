@@ -10,6 +10,9 @@ const LS_PROGRESS = "mushroom.progress.v1";
 
 let unit = "cm";
 let terms = "US";
+let curColl = Registry.collections[0];          // current collection
+let curGen = curColl.generators[0];             // current generator (dress/hat/bag/…)
+const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs"];
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
 let LAST = null;             // most recent /api/pattern response
@@ -19,8 +22,9 @@ let LAST = null;             // most recent /api/pattern response
 const GAUGES = ["rib", "hdc", "sc"];
 const GFIELDS = { Sts: "sts", Rows: "rows", W: "width", H: "height" };
 const BODY = ["bust", "waist", "upperBust", "hip", "upperArm", "wrist", "skirtLen", "sleeveLen"];
+const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen" };
 // measurement fields that must be numerically converted when the unit changes
-const CONVERT = [...BODY, "ribW", "ribH", "hdcW", "hdcH", "scW", "scH"];
+const CONVERT = [...BODY, "ribW", "ribH", "hdcW", "hdcH", "scW", "scH", ...Object.keys(ACC)];
 
 function gather() {
   const num = (id) => parseFloat($(id).value);
@@ -54,9 +58,11 @@ function gather() {
     body: ($("bodyName").value || "").trim() || "body colour",
   };
   const palette = { cap: $("capCol").value, spot: $("spotCol").value, body: $("bodyCol").value };
+  const accessory = {};
+  for (const [id, key] of Object.entries(ACC)) accessory[key] = num(id);
 
   return {
-    input: { unit, terms, gauges, body, style, colors },
+    input: { unit, terms, gauges, body, style, colors, accessory },
     palette,
     ui: {
       name: $("pName").value,
@@ -78,6 +84,9 @@ function apply(state) {
   for (const btn of $("termsSeg").children) btn.classList.toggle("on", btn.dataset.terms === terms);
   $("sleeveless").checked = !!(input.style && input.style.sleeveless);
   $("strapless").checked = !!(input.style && input.style.strapless);
+  if (input.accessory) {
+    for (const [id, key] of Object.entries(ACC)) if (input.accessory[key] != null) $(id).value = input.accessory[key];
+  }
 
   for (const g of GAUGES) {
     $(g + "Sts").value = input.gauges[g].sts;
@@ -119,17 +128,94 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 // so the app is a static site — no server, works offline and on GitHub Pages.
 function generate() {
   const { input, palette, ui } = gather();
-  localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui }));
+  localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui, coll: curColl.id, gen: curGen.id }));
   try {
-    let result = CrochetCore.computePattern(input);
+    let result = CrochetCore[curGen.compute](input);
     result = CrochetCore.convertTerms(result, input.terms || "US");
-    result.svg = CrochetViz.renderDressSvg(result, input, palette, { schematic: $("schematic").checked });
+    result.svg = CrochetViz.render(result, input, palette, { schematic: $("schematic").checked });
     result.yarn = CrochetCore.estimateYarn(result);
     render(result);
     $("status").textContent = "updated";
   } catch (err) {
     $("status").textContent = "error: " + err.message;
   }
+}
+
+/* ---------- collection / generator (registry-driven) ---------- */
+
+function buildTypeSwitch(coll) {
+  $("collLabel").textContent = coll.name;
+  $("typeSeg").innerHTML = coll.generators
+    .map((g) => `<button data-gen="${g.id}">${g.emoji ? g.emoji + " " : ""}${esc(g.label)}</button>`).join("");
+}
+
+function setGenerator(gen) {
+  curGen = gen;
+  for (const b of $("typeSeg").children) b.classList.toggle("on", b.dataset.gen === gen.id);
+  for (const gid of INPUT_GROUPS) $(gid).hidden = !gen.inputGroups.includes(gid);
+  $("schematic").closest("label").style.display = gen.schematic ? "" : "none";
+  document.querySelector(".toolbar h2").textContent = "Your " + gen.label.toLowerCase();
+}
+
+/* ---------- home / studio routing ---------- */
+
+function showHome() {
+  $("studioView").hidden = true;
+  $("homeView").hidden = false;
+  renderHome();
+  if (location.hash !== "#/") location.hash = "#/";
+}
+
+function openStudio(collId, genId, setHash = true) {
+  const f = Registry.find(collId, genId) || Registry.find(curColl.id, curColl.generators[0].id);
+  curColl = f.collection;
+  buildTypeSwitch(curColl);
+  setGenerator(f.generator);
+  $("homeView").hidden = true;
+  $("studioView").hidden = false;
+  if (setHash) location.hash = "#/" + curColl.id + "/" + f.generator.id;
+  generate();
+}
+
+function route() {
+  const m = (location.hash || "").match(/^#\/([^/]+)\/([^/]+)/);
+  if (m && Registry.find(m[1], m[2])) openStudio(m[1], m[2], false);
+  else showHome();
+}
+
+function renderHome() {
+  $("collections").innerHTML = Registry.collections.map((c) => `
+    <div class="collection">
+      <h2>${c.emoji} ${esc(c.name)}</h2>
+      <p class="ctag">${esc(c.tagline)}</p>
+      <div class="gallery">
+        ${c.generators.map((g) => `
+          <button class="gcard" data-coll="${c.id}" data-gen="${g.id}">
+            <div class="gemoji">${g.emoji}</div>
+            <div class="gname">${esc(g.label)}</div>
+            <div class="gblurb">${esc(g.blurb)}</div>
+            <div class="ggo">Open studio →</div>
+          </button>`).join("")}
+        <div class="gcard soon"><div class="gemoji">✨</div><div class="gname">More coming</div><div class="gblurb">New collections and patterns will appear here.</div></div>
+      </div>
+    </div>`).join("");
+  renderHomeProjects();
+}
+
+function renderHomeProjects() {
+  const projects = loadProjects();
+  const ids = Object.keys(projects).sort((a, b) => projects[b].savedAt - projects[a].savedAt);
+  if (!ids.length) { $("homeProjects").innerHTML = ""; return; }
+  $("homeProjects").innerHTML = `<div class="homeproj"><h2>Your projects</h2><div class="hplist">` +
+    ids.map((id) => {
+      const pr = projects[id], gen = pr.state.gen || "dress";
+      const found = Registry.find(pr.state.coll || "mushroom", gen);
+      const emoji = found ? found.generator.emoji : "🧶";
+      return `<div class="hp" data-load="${id}"><div class="hpe">${emoji}</div>
+        <div class="hpn">${esc(pr.state.ui.name || "Untitled")}</div>
+        <div class="hpk">${esc(found ? found.generator.label : gen)}</div>
+        <button class="x" data-del="${id}" title="Delete">✕</button></div>`;
+    }).join("") + `</div></div>`;
 }
 
 function render(data) {
@@ -255,6 +341,8 @@ function renderProjects() {
 
 function saveCurrent() {
   const state = gather();
+  state.coll = curColl.id;
+  state.gen = curGen.id;
   if (!state.ui.name.trim()) state.ui.name = "Untitled";
   const projects = loadProjects();
   const id = activeId || ("p" + Date.now().toString(36));
@@ -271,7 +359,7 @@ function loadProject(id) {
   activeId = id;
   apply(pr.state);
   renderProjects();
-  generate();
+  openStudio(pr.state.coll || "mushroom", pr.state.gen || "dress");  // switches generator + generates
 }
 
 function deleteProject(id) {
@@ -325,6 +413,38 @@ function wire() {
     });
   }
 
+  // generator switch (buttons are built from the registry, so use delegation)
+  $("typeSeg").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-gen]");
+    if (!btn || btn.dataset.gen === curGen.id) return;
+    const gen = curColl.generators.find((g) => g.id === btn.dataset.gen);
+    setGenerator(gen);
+    location.hash = "#/" + curColl.id + "/" + gen.id;
+    generate();
+  });
+
+  // home gallery + back + home project list + hash routing
+  $("collections").addEventListener("click", (e) => {
+    const card = e.target.closest(".gcard[data-gen]");
+    if (card) openStudio(card.dataset.coll, card.dataset.gen);
+  });
+  $("homeProjects").addEventListener("click", (e) => {
+    const load = e.target.closest(".hp[data-load]");
+    const del = e.target.closest(".x[data-del]");
+    if (del) { deleteProject(del.dataset.del); renderHomeProjects(); e.stopPropagation(); }
+    else if (load) loadProject(load.dataset.load);
+  });
+  $("backBtn").addEventListener("click", showHome);
+  addEventListener("hashchange", route);
+
+  for (const btn of $("lenPresets").children) {
+    btn.addEventListener("click", () => {
+      const cm = parseFloat(btn.dataset.len);
+      $("skirtLen").value = unit === "in" ? Math.round(cm / 2.54 * 10) / 10 : cm;
+      generate();
+    });
+  }
+
   $("saveBtn").addEventListener("click", saveCurrent);
   $("newBtn").addEventListener("click", () => {
     activeId = null;
@@ -373,7 +493,14 @@ function wire() {
   });
   addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
 
-  $("printBtn").addEventListener("click", () => window.print());
+  $("printBtn").addEventListener("click", () => {
+    // The page <title> becomes the suggested PDF filename in "Save as PDF".
+    const prev = document.title;
+    const name = ($("pName").value.trim() || "Mushroom pattern") + " — crochet pattern";
+    document.title = name;
+    window.print();
+    setTimeout(() => { document.title = prev; }, 800);
+  });
   $("svgBtn").addEventListener("click", downloadSVG);
   $("exportBtn").addEventListener("click", exportAll);
   $("importBtn").addEventListener("click", () => $("importFile").click());
@@ -458,8 +585,11 @@ function DEFAULT_STATE() {
       },
       body: { bust: 92, waist: 74, upperBust: 84, hip: 98, upperArm: 30, wrist: 16, skirtLen: 45, sleeveLen: 50 },
       style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, dotSizes: [1.5, 2.5, 3.5] },
+      accessory: { headCirc: 56, sideHeight: 8, brimWidth: 5, diameter: 18, height: 22, strapLen: 70 },
       colors: { cap: "cap colour", spot: "spot colour", body: "body colour" },
     },
+    coll: "mushroom",
+    gen: "dress",
     ui: { name: "", capCol: "#B83A2B", spotCol: "#FCF8EF", bodyCol: "#F2E4C9" },
   };
 }
@@ -471,7 +601,8 @@ function DEFAULT_STATE() {
   fillReference();
   let working = null;
   try { working = JSON.parse(localStorage.getItem(LS_WORKING)); } catch { working = null; }
-  if (working && working.input) apply(working);
+  if (working && working.input) apply(working);   // prime the form fields
   renderProjects();
-  generate();
+  buildTypeSwitch(curColl);
+  route();   // #/coll/gen → that studio; otherwise the home page
 })();
