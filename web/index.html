@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mushroom Dress — Crochet Pattern Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="cap">
+  <div class="wrap" style="padding-bottom:0">
+    <h1>Mushroom Dress — Pattern Studio</h1>
+    <p>Made-to-measure crochet, sized to you. Set your gauge, measurements and spots — see the dress, read the pattern, and save projects in your browser.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- ============ INPUTS ============ -->
+    <div class="col-in">
+      <!-- projects -->
+      <div class="panel">
+        <h2>Projects</h2>
+        <p class="sub">Saved in this browser. No account, nothing leaves your device.</p>
+        <div class="field">
+          <label>Project name</label>
+          <input type="text" id="pName" placeholder="Mushroom dress">
+        </div>
+        <div class="btnrow">
+          <button class="btn sm" id="saveBtn">💾 Save</button>
+          <button class="btn ghost sm" id="newBtn">＋ New</button>
+          <button class="btn ghost sm" id="dupBtn">⧉ Duplicate</button>
+        </div>
+        <div class="proj-list" id="projList"></div>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn ghost sm" id="exportBtn">⭳ Export all</button>
+          <button class="btn ghost sm" id="importBtn">⭱ Import</button>
+          <input type="file" id="importFile" accept="application/json" hidden>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Your numbers</h2>
+        <p class="sub">Swatch first — every count depends on it.</p>
+
+        <div class="two">
+          <div>
+            <div class="group-label">Units</div>
+            <div class="seg" id="unitSeg">
+              <button data-unit="cm" class="on">cm</button>
+              <button data-unit="in">inches</button>
+            </div>
+          </div>
+          <div>
+            <div class="group-label">Terms</div>
+            <div class="seg" id="termsSeg">
+              <button data-terms="US" class="on">US</button>
+              <button data-terms="UK">UK</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-label">Colours &amp; spots</div>
+        <div class="crow">
+          <input type="color" id="capCol" value="#B83A2B">
+          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" placeholder="e.g. Crimson"></div>
+        </div>
+        <div class="crow">
+          <input type="color" id="spotCol" value="#FCF8EF">
+          <div><div class="clab">Spots</div><input type="text" id="spotName" placeholder="e.g. Ivory"></div>
+        </div>
+        <div class="crow">
+          <input type="color" id="bodyCol" value="#F2E4C9">
+          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" placeholder="e.g. Oat"></div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label>Spot sizes <span class="hint">cm/in, comma-separated</span></label>
+            <input type="text" id="dotSizes" value="1.5, 2.5, 3.5">
+          </div>
+          <div class="field">
+            <label>Spot spacing</label>
+            <select id="dotGap">
+              <option value="0.8">Dense</option>
+              <option value="1.2" selected>Scattered</option>
+              <option value="1.8">Sparse</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="group-label">Gauge <span class="hint" style="font-weight:400">(relaxed swatch: sts &amp; rows over W×H)</span></div>
+        <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
+        <div class="gauge">
+          <div class="gl">Rib</div>
+          <input type="number" id="ribSts" value="18" step="0.5"><input type="number" id="ribRows" value="9" step="0.5">
+          <input type="number" id="ribW" value="10" step="0.1"><input type="number" id="ribH" value="10" step="0.1">
+        </div>
+        <div class="gauge">
+          <div class="gl">Hdc</div>
+          <input type="number" id="hdcSts" value="14" step="0.5"><input type="number" id="hdcRows" value="11" step="0.5">
+          <input type="number" id="hdcW" value="10" step="0.1"><input type="number" id="hdcH" value="10" step="0.1">
+        </div>
+        <div class="gauge">
+          <div class="gl">Sc</div>
+          <input type="number" id="scSts" value="16" step="0.5"><input type="number" id="scRows" value="18" step="0.5">
+          <input type="number" id="scW" value="10" step="0.1"><input type="number" id="scH" value="10" step="0.1">
+        </div>
+
+        <div class="group-label">Body measurements</div>
+        <div class="two">
+          <div class="field"><label>Bust</label><input type="number" id="bust" value="92" step="0.5"></div>
+          <div class="field"><label>Waist</label><input type="number" id="waist" value="74" step="0.5"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Upper bust</label><input type="number" id="upperBust" value="84" step="0.5"></div>
+          <div class="field"><label>Hip</label><input type="number" id="hip" value="98" step="0.5"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Upper arm</label><input type="number" id="upperArm" value="30" step="0.5"></div>
+          <div class="field"><label>Wrist</label><input type="number" id="wrist" value="16" step="0.5"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Skirt length</label><input type="number" id="skirtLen" value="45" step="0.5"></div>
+          <div class="field"><label>Sleeve length</label><input type="number" id="sleeveLen" value="50" step="0.5"></div>
+        </div>
+
+        <div class="group-label">Fit &amp; style</div>
+        <div class="two">
+          <div class="field"><label>Waist grip <span class="hint">−ease</span></label>
+            <select id="waistEase"><option value="-3">Snug (−3)</option><option value="-5" selected>Firm (−5)</option><option value="-7">Tight (−7)</option></select></div>
+          <div class="field"><label>Skirt fullness</label>
+            <select id="fullness"><option value="1.6">A-line (1.6×)</option><option value="2.0" selected>Skater (2.0×)</option><option value="2.5">Very full (2.5×)</option></select></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Flounce ruffle</label>
+            <select id="flare"><option value="1.5">Soft (1.5×)</option><option value="1.8" selected>Ruffled (1.8×)</option><option value="2.2">Dramatic (2.2×)</option></select></div>
+          <div class="field"><label>Sleeve volume</label>
+            <select id="balloon"><option value="1.25">Gentle (1.25×)</option><option value="1.4" selected>Lantern (1.4×)</option><option value="1.6">Balloon (1.6×)</option></select></div>
+        </div>
+        <div class="group-label">Silhouette</div>
+        <div class="two">
+          <label class="chk"><input type="checkbox" id="sleeveless"> Sleeveless</label>
+          <label class="chk"><input type="checkbox" id="strapless"> Strapless</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div class="col-out">
+      <div class="toolbar">
+        <h2>Your dress</h2>
+        <div class="btnrow" style="margin:0;align-items:center">
+          <span class="status" id="status"></span>
+          <label class="chk" style="padding:0"><input type="checkbox" id="schematic"> Measurements</label>
+          <button class="btn ghost sm" id="svgBtn">⬇ SVG</button>
+          <button class="btn ghost sm" id="printBtn">🖨 Print</button>
+        </div>
+      </div>
+      <div class="viz" id="viz"></div>
+      <div id="warnings"></div>
+      <div id="yarn"></div>
+      <div class="cards" id="cards"></div>
+
+      <details class="refbox" id="abbr">
+        <summary>Abbreviations &amp; US ↔ UK terms</summary>
+        <div class="refgrid" id="abbrGrid"></div>
+        <table class="uk" id="ukTable"></table>
+      </details>
+
+      <p class="foot">
+        Starting counts from your gauge — crochet relaxes and stretches, so try pieces on as you go,
+        especially the waistband and cuffs. Written in US crochet terms.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="crochet-core.js"></script>
+<script src="crochet-viz.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

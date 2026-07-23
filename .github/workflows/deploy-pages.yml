@@ -1,0 +1,55 @@
+# Tests run on every push and pull request; the live GitHub Pages site is only
+# ever deployed from main/master (or a manual run) — never from a pull request.
+#
+# One-time setup: repo Settings → Pages → Source → "GitHub Actions".
+# The site then lives at https://<user>.github.io/<repo>/ and redeploys on
+# every push to main.
+
+name: Test & Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Least privilege by default; the deploy job opts into the Pages permissions.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test
+
+  deploy:
+    # Never deploy from a pull request — this keeps PRs from touching the live
+    # site. Only a push to main/master (or a manual dispatch) publishes.
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Serialise deploys; let an in-flight publish finish rather than cancel it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
