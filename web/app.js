@@ -357,6 +357,22 @@ function wire() {
     else setRound(p.id, getRound(p.id) + parseInt(btn.dataset.d, 10), p.progress.total);
   });
 
+  // PWA install: show the button only when the browser offers installation
+  let deferredPrompt = null;
+  addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    $("installBtn").hidden = false;
+  });
+  $("installBtn").addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    $("installBtn").hidden = true;
+  });
+  addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
+
   $("printBtn").addEventListener("click", () => window.print());
   $("svgBtn").addEventListener("click", downloadSVG);
   $("exportBtn").addEventListener("click", exportAll);

@@ -57,6 +57,8 @@ var CrochetViz = (function (Core) {
     var upperBust = cm(body.upperBust != null ? body.upperBust : 84);
     var waistband = meta.waistbandCirc, hem = meta.hemCirc;
     var upperArm = cm(body.upperArm != null ? body.upperArm : 30);
+    var wrist = cm(body.wrist != null ? body.wrist : 16);
+    var hip = cm(body.hip != null ? body.hip : 98);
     var skirtLen = cm(body.skirtLen != null ? body.skirtLen : 45);
     var sleeveLen = cm(body.sleeveLen != null ? body.sleeveLen : 50);
     var flare = style.flare != null ? style.flare : 1.8;
@@ -69,6 +71,7 @@ var CrochetViz = (function (Core) {
     var flTopHalf = halfw(upperBust, 0.34);
     var flBotHalf = Math.min(width * 0.44, flTopHalf * lerp(1.15, 1.5, Math.min(flare / 2.2, 1)));
     var waistHalf = halfw(waistband, 0.30);
+    var hipHalf = halfw(hip, 0.46);
     var hemHalf = halfw(hem, 0.46);
 
     var yShoulder = 84, yFlTop = 96, flH = 150;
@@ -76,6 +79,7 @@ var CrochetViz = (function (Core) {
     var yWaist = yFlBot + 46;
     var skirtH = Math.max(150, Math.min(height - yWaist - 70, skirtLen * scale * 1.15));
     var yHem = yWaist + skirtH;
+    var yHip = yWaist + (yHem - yWaist) * 0.42;
 
     var parts = [];
     parts.push('<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="' + pal.bg + '"/>');
@@ -87,30 +91,21 @@ var CrochetViz = (function (Core) {
     var waistHalfPre = Math.min(width * 0.30, (waistband / 2) * scale);
     parts.push('<path d="M ' + e(cx - bodTopHalf) + ' ' + e(yBodTop) + ' L ' + e(cx + bodTopHalf) + ' ' + e(yBodTop) + ' L ' + e(cx + waistHalfPre) + ' ' + e(yWaist) + ' L ' + e(cx - waistHalfPre) + ' ' + e(yWaist) + ' Z" fill="' + pal.body + '" opacity="0.55"/>');
 
-    // sleeves
-    var slBulge = Math.min(70, (upperArm * balloon / 2) * scale * 0.9);
-    var slLen = Math.min(230, Math.max(150, sleeveLen * scale * 0.9));
-    var ySlTop = yFlTop + 6, ySlBot = ySlTop + slLen, ySlMid = ySlTop + slLen * 0.55;
-    var spotRegions = [];
+    // sleeve dimensions — drawn later, on top of the flounce so they aren't hidden
+    var slBulge = Math.min(76, (upperArm * balloon / 2) * scale * 1.0);
+    var slLen = Math.min(240, Math.max(150, sleeveLen * scale * 0.95));
+    var ySlTop = yFlTop + 4, ySlBot = ySlTop + slLen, ySlMid = ySlTop + slLen * 0.5;
+    var cuffHalf = Math.max(9, Math.min(26, (wrist / 2) * scale * 1.15));
     var sleeveless = !result.pieces.some(function (p) { return p.id === "sleeves"; });
-    if (!sleeveless) {
-      [-1, 1].forEach(function (side) {
-        var ox = cx + side * (flTopHalf - 6);
-        var outer = ox + side * slBulge, cuffHalf = 20;
-        var path = "M " + e(ox) + " " + e(ySlTop) +
-          " C " + e(ox + side * slBulge * 1.1) + " " + e(ySlTop + 12) + ", " + e(outer) + " " + e(ySlMid - 30) + ", " + e(outer) + " " + e(ySlMid) +
-          " C " + e(outer) + " " + e(ySlMid + 40) + ", " + e(ox + side * cuffHalf) + " " + e(ySlBot - 14) + ", " + e(ox + side * cuffHalf) + " " + e(ySlBot) +
-          " L " + e(ox - side * cuffHalf) + " " + e(ySlBot) +
-          " C " + e(ox - side * cuffHalf) + " " + e(ySlBot - 40) + ", " + e(ox) + " " + e(ySlMid + 30) + ", " + e(ox) + " " + e(ySlMid) +
-          " C " + e(ox) + " " + e(ySlMid - 40) + ", " + e(ox) + " " + e(ySlTop + 20) + ", " + e(ox) + " " + e(ySlTop) + " Z";
-        parts.push('<path d="' + path + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
-        parts.push('<rect x="' + e(ox - cuffHalf) + '" y="' + e(ySlBot - 10) + '" width="' + e(2 * cuffHalf) + '" height="12" rx="4" fill="' + pal.capDeep + '"/>');
-        spotRegions.push({ x0: Math.min(ox, outer) + 6, x1: Math.max(ox, outer) - 6, y0: ySlTop + 20, y1: ySlMid + 30, density: 0.55 });
-      });
-    }
+    var spotRegions = [];
 
-    // skirt
-    parts.push('<path d="M ' + e(cx - waistHalf) + ' ' + e(yWaist) + ' L ' + e(cx + waistHalf) + ' ' + e(yWaist) + ' L ' + e(cx + hemHalf) + ' ' + e(yHem) + ' Q ' + e(cx) + ' ' + e(yHem + 20) + ' ' + e(cx - hemHalf) + ' ' + e(yHem) + ' Z" fill="' + pal.body + '" stroke="' + pal.line + '" stroke-width="2"/>');
+    // skirt — curves through the hip so hip measurement visibly shapes it
+    parts.push('<path d="M ' + e(cx - waistHalf) + ' ' + e(yWaist) +
+      ' L ' + e(cx + waistHalf) + ' ' + e(yWaist) +
+      ' Q ' + e(cx + hipHalf) + ' ' + e(yHip) + ' ' + e(cx + hemHalf) + ' ' + e(yHem) +
+      ' Q ' + e(cx) + ' ' + e(yHem + 20) + ' ' + e(cx - hemHalf) + ' ' + e(yHem) +
+      ' Q ' + e(cx - hipHalf) + ' ' + e(yHip) + ' ' + e(cx - waistHalf) + ' ' + e(yWaist) +
+      ' Z" fill="' + pal.body + '" stroke="' + pal.line + '" stroke-width="2"/>');
 
     // hem frill
     var scallops = 14, frill = ["M " + e(cx - hemHalf) + " " + e(yHem)];
@@ -142,6 +137,28 @@ var CrochetViz = (function (Core) {
     parts.push('<path d="' + gill.join(" ") + '" fill="none" stroke="' + pal.body + '" stroke-width="6" stroke-linecap="round" opacity="0.85"/>');
 
     spotRegions.push({ x0: cx - flBotHalf + 8, x1: cx + flBotHalf - 8, y0: yFlTop + 12, y1: yFlBot - 8, density: 1.0, taper: [flTopHalf, flBotHalf, yFlTop, yFlBot, cx] });
+
+    // sleeves (drawn here, on top of the flounce, hanging from the shoulders)
+    if (!sleeveless) {
+      [-1, 1].forEach(function (side) {
+        var topX = cx + side * flTopHalf;                 // attach at the flounce top corner
+        var shoulderW = 13;
+        var outerMax = topX + side * slBulge;             // widest point of the balloon
+        var innerMin = topX - side * 4;                   // inner edge, near the body
+        var cuffCenter = topX + side * (slBulge * 0.18);  // cuff drapes slightly outward
+        var path =
+          "M " + e(topX - side * shoulderW) + " " + e(ySlTop) +
+          " Q " + e(topX + side * shoulderW) + " " + e(ySlTop - 4) + " " + e(topX + side * shoulderW) + " " + e(ySlTop + 8) +
+          " C " + e(outerMax) + " " + e(ySlTop + 34) + ", " + e(outerMax) + " " + e(ySlMid - 18) + ", " + e(outerMax) + " " + e(ySlMid) +
+          " C " + e(outerMax) + " " + e(ySlMid + 48) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot - 22) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot) +
+          " L " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot) +
+          " C " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot - 26) + ", " + e(innerMin) + " " + e(ySlMid + 32) + ", " + e(innerMin) + " " + e(ySlMid) +
+          " C " + e(innerMin) + " " + e(ySlMid - 40) + ", " + e(topX - side * shoulderW) + " " + e(ySlTop + 30) + ", " + e(topX - side * shoulderW) + " " + e(ySlTop) + " Z";
+        parts.push('<path d="' + path + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+        parts.push('<rect x="' + e(cuffCenter - cuffHalf) + '" y="' + e(ySlBot - 10) + '" width="' + e(2 * cuffHalf) + '" height="12" rx="4" fill="' + pal.capDeep + '"/>');
+        spotRegions.push({ x0: Math.min(innerMin, outerMax) + 5, x1: Math.max(innerMin, outerMax) - 5, y0: ySlTop + 16, y1: ySlMid + 24, density: 0.5 });
+      });
+    }
 
     // straps
     var strapless = !result.pieces.some(function (p) { return p.id === "straps"; });
