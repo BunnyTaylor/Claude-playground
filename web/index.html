@@ -19,12 +19,21 @@
 <body>
 <header class="cap">
   <div class="wrap" style="padding-bottom:0">
-    <h1>Mushroom Dress — Pattern Studio</h1>
-    <p>Made-to-measure crochet, sized to you. Set your gauge, measurements and spots — see the dress, read the pattern, and save projects in your browser.</p>
+    <h1 id="appTitle">Crochet Pattern Studio</h1>
+    <p id="appTagline">Made-to-measure crochet patterns, sized to you. Pick a pattern, set your gauge and measurements, and see it, read it, count your rounds, and save it — all in your browser.</p>
   </div>
 </header>
 
-<div class="wrap">
+<!-- ============ HOME ============ -->
+<div class="wrap" id="homeView">
+  <div id="collections"></div>
+  <div id="homeProjects"></div>
+  <p class="foot">Everything runs in your browser and saves to this device — no account, nothing uploaded. More pattern collections coming.</p>
+</div>
+
+<!-- ============ STUDIO ============ -->
+<div class="wrap" id="studioView" hidden>
+  <button class="btn ghost sm" id="backBtn" style="margin-bottom:14px">← All patterns</button>
   <div class="grid">
     <!-- ============ INPUTS ============ -->
     <div class="col-in">
@@ -53,12 +62,8 @@
         <h2>Your numbers</h2>
         <p class="sub">Swatch first — every count depends on it.</p>
 
-        <div class="group-label">Make</div>
-        <div class="seg" id="typeSeg">
-          <button data-type="dress" class="on">Dress</button>
-          <button data-type="hat">Hat</button>
-          <button data-type="bag">Bag</button>
-        </div>
+        <div class="group-label" id="collLabel">Make</div>
+        <div class="seg" id="typeSeg"></div>
 
         <div class="two" style="margin-top:14px">
           <div>
@@ -224,6 +229,7 @@
 
 <script src="crochet-core.js"></script>
 <script src="crochet-viz.js"></script>
+<script src="registry.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
