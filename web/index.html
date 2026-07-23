@@ -7,6 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#B83A2B">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+  if ("serviceWorker" in navigator) {
+    addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+  }
+</script>
 </head>
 <body>
 <header class="cap">
@@ -154,6 +162,7 @@
         <div class="btnrow" style="margin:0;align-items:center">
           <span class="status" id="status"></span>
           <label class="chk" style="padding:0"><input type="checkbox" id="schematic"> Measurements</label>
+          <button class="btn sm" id="installBtn" hidden>⬇ Install app</button>
           <button class="btn ghost sm" id="svgBtn">⬇ SVG</button>
           <button class="btn ghost sm" id="printBtn">🖨 Print</button>
         </div>

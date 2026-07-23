@@ -45,6 +45,11 @@ row counter** (tappable, tracks increase rounds, saves progress per project), a
 delete, and export/import all projects as a JSON file to move between devices.
 Nothing leaves your device.
 
+It's also an **installable PWA**: on a hosted copy (GitHub Pages / your own
+host) your browser offers "Install app" / "Add to Home Screen," and after the
+first visit it works **fully offline** — ideal for crocheting with the phone
+propped next to you and no signal.
+
 ## Host it
 
 The app is static, so it hosts anywhere:
@@ -166,4 +171,3 @@ Ideas, roughly in value order:
 2. **More silhouettes** — tiered skirt, midi/maxi presets, high-neck variant.
 3. **Proper PDF export** (currently the browser's print dialog).
 4. **Photo progress log** per project, alongside the row counter.
-5. Installable as a PWA (add to home screen, fully offline).
