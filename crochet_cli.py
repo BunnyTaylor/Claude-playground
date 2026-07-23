@@ -90,6 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = p.add_argument_group("style")
     for flag in _STYLE:
         s.add_argument(f"--{flag.replace('_', '-')}", type=float, dest=flag)
+    s.add_argument("--dot-sizes", dest="dot_sizes", metavar="A,B,C",
+                   help="comma-separated spot diameters for a scattered mix (e.g. 1.5,2.5,3.5)")
 
     g = p.add_argument_group("gauge (per stitch: sts / rows over w x h)")
     for st in _GAUGE_STITCHES:
@@ -103,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
     o = p.add_argument_group("output")
     o.add_argument("--piece", metavar="ID", help="show only one piece (e.g. skirt, sleeves)")
     o.add_argument("--json", action="store_true", help="emit the full result as JSON")
+    o.add_argument("--svg", metavar="FILE", help="also write an SVG dress visualization to FILE")
     o.add_argument("--dump-config", metavar="FILE", help="write the resolved input to FILE and exit")
     o.add_argument("--no-chart", action="store_true", help="skip the ASCII spot chart")
     o.add_argument("--no-color", action="store_true", help="disable ANSI colour")
@@ -130,6 +133,12 @@ def resolve_input(args: argparse.Namespace) -> Dict[str, Any]:
     for flag, key in _STYLE.items():
         if getattr(args, flag) is not None:
             inp["style"][key] = getattr(args, flag)
+    if getattr(args, "dot_sizes", None):
+        sizes = [float(x) for x in args.dot_sizes.replace(" ", "").split(",") if x]
+        if sizes:
+            inp["style"]["dotDia"] = sizes[0]
+            if len(sizes) > 1:
+                inp["style"]["dotSizes"] = sizes
     for flag, key in _COLORS.items():
         if getattr(args, flag) is not None:
             inp["colors"][key] = getattr(args, flag)
@@ -176,7 +185,7 @@ def render_piece(piece: Dict[str, Any], sty: Style, show_chart: bool) -> str:
     out.append(sty.dim(f"│ {piece['stitch']}"))
     out.append(sty.head(f"└{bar}┘"))
 
-    counts = ", ".join(f"{k}: {v}" for k, v in piece["counts"].items())
+    counts = ", ".join(f"{k}: {v}" for k, v in piece["counts"].items() if k != "sizes")
     out.append("  " + sty.moss(counts))
     out.append("")
 
@@ -266,6 +275,16 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+    if args.svg:
+        try:
+            from crochet_viz import render_dress_svg
+            with open(args.svg, "w", encoding="utf-8") as fh:
+                fh.write(render_dress_svg(result, inp))
+        except OSError as exc:
+            print(f"error: could not write SVG: {exc}", file=sys.stderr)
+            return 2
+        print(f"Wrote visualization to {args.svg}")
 
     if args.json:
         # strip the chart's nested rows down for compact JSON? keep it full.

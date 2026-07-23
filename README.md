@@ -6,24 +6,39 @@ body measurements into a full nine-piece pattern for an amanita-mushroom dress
 with exact stitch counts and round-by-round written instructions.
 
 This is a Python port of a JavaScript engine (`crochet-core.mjs`). The pure
-engine is the asset; the CLI is a renderer over it.
+engine is the asset; everything else renders over it.
 
 ```
 crochet_core.py        the pattern engine — pure, dependency-free, no I/O
+crochet_viz.py         SVG dress visualizer (stdlib only)
 crochet_cli.py         command-line renderer over the engine
-test_crochet_core.py   the test contract (22 tests, each locking a real bug)
+serve.py               tiny stdlib web server for the browser UI
+web/                   the web UI (HTML/CSS/JS) with in-browser project saving
+test_crochet_core.py   the test contract (25 tests, each locking a real bug)
 ```
+
+Everything is standard-library Python 3.8+ — nothing to `pip install`.
 
 ## Quick start
 
-No dependencies — standard-library Python 3.8+.
+### Web UI (recommended)
 
 ```bash
-# Full default pattern (DK cotton, average measurements)
-python3 crochet_cli.py
+python3 serve.py --open          # opens http://127.0.0.1:8000
+```
 
-# Confirm the engine is correct
-python3 test_crochet_core.py        # or: pytest
+Set your gauge, measurements, colours and spot sizes and the page shows a
+**live SVG preview of the dress** alongside the full round-by-round pattern.
+**Projects are saved in your browser** (localStorage) — name one, hit Save,
+and it survives refreshes; load, duplicate or delete saved projects from the
+sidebar. Nothing leaves your device, and there's no account or server storage.
+
+### Command line
+
+```bash
+python3 crochet_cli.py                       # full default pattern
+python3 crochet_cli.py --svg dress.svg       # also export the visualization
+python3 test_crochet_core.py                 # confirm the engine (or: pytest)
 ```
 
 ## Using the CLI
@@ -43,6 +58,9 @@ python3 crochet_cli.py --unit in --waist 29 --hip 38 \
 # Non-square rib swatch: 20 sts over 9cm, 11 rows over 10cm
 python3 crochet_cli.py --rib-sts 20 --rib-w 9 --rib-rows 11 --rib-h 10
 
+# Spots in several sizes (a scattered, mixed look) + a saved picture
+python3 crochet_cli.py --dot-sizes 1.5,2.5,3.5 --svg dress.svg
+
 # One piece only, or machine-readable output
 python3 crochet_cli.py --piece sleeves
 python3 crochet_cli.py --json > pattern.json
@@ -59,6 +77,33 @@ force it off.
 > **Unit note:** the built-in defaults are centimetre-shaped. `--unit in` tells
 > the engine to *interpret* your numbers as inches — it does not convert the
 > defaults, so pass inch measurements and inch swatch sizes together.
+
+## Spots in several sizes
+
+By default the flounce and sleeves carry one uniform spot size, worked as
+tapestry crochet in even repeating bands. Give the design **several
+diameters** and it switches to a scattered mix:
+
+```python
+inp = default_input()
+inp["style"]["dotSizes"] = [1.5, 2.5, 3.5]     # cm (or inches, matching unit)
+```
+
+Mixed sizes don't tile into even tapestry bands, so the engine changes the
+`spots` piece to the honest construction for a varied look — work the ground
+plain, then add each spot as surface embroidery or applique — and returns one
+elliptical `chart` per size (largest first). A single-element `dotSizes`
+behaves exactly like the classic single-`dotDia` path, so default output is
+unchanged.
+
+## Visualization
+
+`crochet_viz.render_dress_svg(result, input, palette=None)` returns an SVG
+front view of the finished dress — off-shoulder flounce, lantern sleeves,
+fitted waist, A-line skirt, scallop frills and hem mushrooms — scaled from the
+real circumferences, with spots scattered in whatever sizes the design uses
+(seeded, so the same input always draws the same picture). The web UI shows it
+live; the CLI writes it with `--svg`; call it directly for your own renderer.
 
 ## The API
 
@@ -131,13 +176,13 @@ repeat 9 × 10; sleeves 32 rib → 67 balloon.
 
 ## What's next
 
-The engine and a working CLI are done. Natural next steps, roughly in value
-order (from the original project handoff):
+The engine, CLI, web UI, visualization, multi-size spots and in-browser
+project persistence are all done. Natural next steps, roughly in value order:
 
-1. **Project persistence** — saved projects, each with its own gauges,
-   measurements, colours and yarn notes. (`--config` / `--dump-config` are a
-   first step; a small `projects/` store with `list`/`save`/`load` is the win.)
-2. **Row counter / progress tracking** — the pattern is ~250 rounds; a
-   per-piece counter that knows which round is an increase round beats paper.
-3. Yarn / yardage estimate per piece.
-4. Alternative silhouettes from the same engine (sleeveless, midi, tiered).
+1. **Row counter / progress tracking** — the pattern is ~250 rounds; a
+   per-piece counter that knows which round is an increase round (and shows the
+   running stitch count) beats a paper printout while actually making it.
+2. **Yarn / yardage estimate** per piece.
+3. **Editable spot layout** — drag spots on the preview, save custom scatters.
+4. **Alternative silhouettes** from the same engine (sleeveless, midi, tiered).
+5. Export the project (JSON) to move it between browsers/devices.

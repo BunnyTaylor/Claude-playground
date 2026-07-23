@@ -14,7 +14,7 @@ import math
 
 from crochet_core import (
     compute_pattern, default_input, DEFAULT_INPUT, inc_plan, even_adjust,
-    spot_chart, density, even, mult, to_cm, from_cm,
+    spot_chart, spot_charts, density, even, mult, to_cm, from_cm,
 )
 
 # The JS suite reaches into DEFAULT_INPUT via structuredClone; we deep-copy.
@@ -142,6 +142,42 @@ def test_spot_chart_bulges_in_the_middle():
     assert c["rows"][mid]["w"] >= c["rows"][-1]["w"]
 
 
+def test_spot_charts_are_sorted_largest_first_and_each_valid():
+    charts = spot_charts([2.5, 1.2, 3.5], 1.2, 1.6, 1.8)
+    assert len(charts) == 3
+    dias = [c["diaCm"] for c in charts]
+    assert dias == sorted(dias, reverse=True)  # largest first
+    for c in charts:
+        for row in c["rows"]:
+            assert row["lead"] + row["w"] + row["trail"] == c["repW"]
+
+
+def test_single_dot_size_leaves_default_pattern_unchanged():
+    # dotSizes with one value must equal the dotDia path exactly
+    base = compute_pattern(DEFAULT_INPUT)
+    inp = copy.deepcopy(DEFAULT_INPUT)
+    inp["style"]["dotSizes"] = [inp["style"]["dotDia"]]
+    same = compute_pattern(inp)
+    b = next(p for p in base["pieces"] if p["id"] == "spots")
+    s = next(p for p in same["pieces"] if p["id"] == "spots")
+    assert b["steps"] == s["steps"]
+    assert b["counts"] == s["counts"]
+
+
+def test_multiple_dot_sizes_produce_a_charts_palette_only_on_spots():
+    base = compute_pattern(DEFAULT_INPUT)
+    inp = copy.deepcopy(DEFAULT_INPUT)
+    inp["style"]["dotSizes"] = [1.5, 2.5, 3.5]
+    res = compute_pattern(inp)
+    spots = next(p for p in res["pieces"] if p["id"] == "spots")
+    assert len(spots["charts"]) == 3
+    assert len(spots["counts"]["sizes"]) == 3
+    # every other piece is untouched by the spot-size change
+    for a, b in zip(base["pieces"], res["pieces"]):
+        if a["id"] != "spots":
+            assert a["counts"] == b["counts"], a["id"]
+
+
 # ---------------- helpers ----------------
 
 def test_rib_counts_are_always_even():
@@ -230,6 +266,31 @@ def test_inches_and_centimetres_describe_the_same_garment():
     a = cm["pieces"][0]["counts"]["sts"]
     b = res["pieces"][0]["counts"]["sts"]
     assert abs(a - b) <= 2, f"cm {a} vs in {b}"
+
+
+# ---------------- visualization ----------------
+
+def test_visualizer_renders_well_formed_svg_for_single_and_multi_size():
+    import xml.dom.minidom
+    from crochet_viz import render_dress_svg
+
+    for sizes in (None, [1.5, 2.5, 3.5]):
+        inp = copy.deepcopy(DEFAULT_INPUT)
+        if sizes:
+            inp["style"]["dotSizes"] = sizes
+        svg = render_dress_svg(compute_pattern(inp), inp)
+        assert svg.startswith("<svg") and svg.endswith("</svg>")
+        xml.dom.minidom.parseString(svg)  # raises if malformed
+        assert "ellipse" in svg  # spots got drawn
+
+
+def test_visualizer_is_deterministic():
+    from crochet_viz import render_dress_svg
+    inp = default_input()
+    inp["style"]["dotSizes"] = [1.5, 2.5, 3.5]
+    a = render_dress_svg(compute_pattern(inp), inp)
+    b = render_dress_svg(compute_pattern(inp), inp)
+    assert a == b  # seeded scatter -> same picture every time
 
 
 # --------------- dependency-free runner ---------------

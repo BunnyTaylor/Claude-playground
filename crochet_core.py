@@ -228,6 +228,22 @@ def spot_chart(dia_cm: float, gap_mult: float, st_per_cm: float, row_per_cm: flo
     return {"W": W, "H": H, "gapH": gap_h, "gapV": gap_v, "repW": rep_w, "repH": rep_h, "rows": rows}
 
 
+def spot_charts(sizes_cm: List[float], gap_mult: float, st_per_cm: float, row_per_cm: float) -> List[Dict[str, Any]]:
+    """Build one elliptical chart per spot diameter, largest first.
+
+    Extends :func:`spot_chart` to a *set* of sizes, so a design can mix small,
+    medium and large spots instead of a single uniform dot. Each returned
+    chart carries its own ``diaCm``. Sorted largest-first so the primary
+    (index 0) is the boldest motif.
+    """
+    charts = []
+    for dia in sorted(sizes_cm, reverse=True):
+        c = spot_chart(dia, gap_mult, st_per_cm, row_per_cm)
+        c["diaCm"] = dia
+        charts.append(c)
+    return charts
+
+
 # ------------------------------------------------------------------ #
 # Input
 # ------------------------------------------------------------------ #
@@ -363,27 +379,65 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
     })
 
     # --- 4. spots (colourwork chart) ---
-    chart = spot_chart(dot_dia, S["dotGap"], sc["st"], sc["row"])
+    # A design may specify several spot diameters (dotSizes) for a scattered,
+    # varied look; falling back to the single dotDia keeps default output
+    # unchanged. Charts are largest-first, so charts[0] is the primary motif.
+    raw_sizes = S.get("dotSizes") or [S["dotDia"]]
+    sizes_cm = [to_cm(s, u) for s in raw_sizes]
+    charts = spot_charts(sizes_cm, S["dotGap"], sc["st"], sc["row"])
+    chart = charts[0]
     reps_around = max(1, math.floor(fl_top / chart["repW"]))
     fl_adj = reps_around * chart["repW"]
-    pieces.append({
-        "id": "spots",
-        "title": "Polka spots",
-        "stitch": "tapestry sc · carry both colours",
-        "counts": {
-            "spotW": chart["W"], "spotH": chart["H"], "repeatW": chart["repW"],
-            "repeatH": chart["repH"], "repsAround": reps_around, "adjustedSts": fl_adj,
-        },
-        "chart": chart,
-        "steps": [
-            ["Stitch count", f"Adjust the flounce from {fl_top} to {fl_adj} sts so {reps_around} repeats fit exactly — otherwise the last spot is cut in half at the join."],
-            ["Colour change", "Change colour on the LAST pull-through of the stitch BEFORE the one you want in the new colour."],
-            ["Carrying", "Lay the resting colour along the top of the stitches and work over it. No floats."],
-            *[[f"Rnd {i + 1}", f"*sc {row['lead']} in {C['cap']}, sc {row['w']} in {C['spot']}, sc {row['trail']} in {C['cap']}; rep from * {reps_around} times."] for i, row in enumerate(chart["rows"])],
-            [f"Rnds {chart['H'] + 1}–{chart['repH']}", f"Sc in {C['cap']} around, carrying {C['spot']}."],
-            ["Stagger", f"Shift the next band by {_jsround(chart['repW'] / 2)} sts so spots brick rather than stack."],
-        ],
-    })
+
+    if len(charts) == 1:
+        # Uniform spots: tapestry crochet in even repeating bands.
+        spots_piece = {
+            "id": "spots",
+            "title": "Polka spots",
+            "stitch": "tapestry sc · carry both colours",
+            "counts": {
+                "spotW": chart["W"], "spotH": chart["H"], "repeatW": chart["repW"],
+                "repeatH": chart["repH"], "repsAround": reps_around, "adjustedSts": fl_adj,
+            },
+            "chart": chart,
+            "charts": charts,
+            "steps": [
+                ["Stitch count", f"Adjust the flounce from {fl_top} to {fl_adj} sts so {reps_around} repeats fit exactly — otherwise the last spot is cut in half at the join."],
+                ["Colour change", "Change colour on the LAST pull-through of the stitch BEFORE the one you want in the new colour."],
+                ["Carrying", "Lay the resting colour along the top of the stitches and work over it. No floats."],
+                *[[f"Rnd {i + 1}", f"*sc {row['lead']} in {C['cap']}, sc {row['w']} in {C['spot']}, sc {row['trail']} in {C['cap']}; rep from * {reps_around} times."] for i, row in enumerate(chart["rows"])],
+                [f"Rnds {chart['H'] + 1}–{chart['repH']}", f"Sc in {C['cap']} around, carrying {C['spot']}."],
+                ["Stagger", f"Shift the next band by {_jsround(chart['repW'] / 2)} sts so spots brick rather than stack."],
+            ],
+        }
+    else:
+        # Mixed sizes don't tile into even tapestry bands, so the honest
+        # construction is: work the ground plain, then add each spot as
+        # surface embroidery / applique in whatever mix looks good.
+        size_label = ", ".join(
+            f"{_r1(from_cm(c['diaCm'], u))}{u} ({c['W']}×{c['H']} sts)" for c in charts
+        )
+        spots_piece = {
+            "id": "spots",
+            "title": "Scattered spots (mixed sizes)",
+            "stitch": "surface embroidery / applique · scattered",
+            "counts": {
+                "sizes": [{"diaCm": c["diaCm"], "W": c["W"], "H": c["H"], "repeatW": c["repW"], "repeatH": c["repH"]} for c in charts],
+                "spotW": chart["W"], "spotH": chart["H"], "repeatW": chart["repW"],
+                "repeatH": chart["repH"], "repsAround": reps_around, "adjustedSts": fl_adj,
+            },
+            "chart": chart,
+            "charts": charts,
+            "steps": [
+                ["Approach", f"With spots in {len(charts)} sizes, work the flounce and sleeves plain in {C['cap']}, then add each spot afterwards — mixed sizes will not tile into even tapestry bands."],
+                ["Motif sizes", f"Make spots at these sizes: {size_label}. Each is a filled ellipse worked to the stitch counts shown."],
+                *[[f"Size {i + 1} — {_r1(from_cm(c['diaCm'], u))}{u}", "Widths per row (centre outward): " + ", ".join(str(row["w"]) for row in c["rows"]) + f" sts over {c['H']} rows."] for i, c in enumerate(charts)],
+                ["Placement", f"Scatter them at random over the {C['cap']} areas, mixing large and small, roughly {_r1(from_cm(chart['gapH'] / sc['st'], u))}{u} apart. Aim for an even sprinkle rather than a grid — see the visualisation."],
+                ["Method", f"Duplicate stitch or satin stitch in {C['spot']} for embroidered spots; or crochet each ellipse separately and whip-stitch it on for a raised, appliqued look."],
+                ["Timing", "Add the spots after the piece is worked but before assembly, so the ground fabric lies flat while you stitch."],
+            ],
+        }
+    pieces.append(spots_piece)
 
     # --- 5. sleeves (rib cuff -> sc body) ---
     cuff_sts = even(_jsround((wrist + 2) * rib["st"]))
@@ -521,5 +575,6 @@ computePattern = compute_pattern
 incPlan = inc_plan
 evenAdjust = even_adjust
 spotChart = spot_chart
+spotCharts = spot_charts
 toCm = to_cm
 fromCm = from_cm
