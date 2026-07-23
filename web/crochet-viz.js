@@ -138,25 +138,27 @@ var CrochetViz = (function (Core) {
 
     spotRegions.push({ x0: cx - flBotHalf + 8, x1: cx + flBotHalf - 8, y0: yFlTop + 12, y1: yFlBot - 8, density: 1.0, taper: [flTopHalf, flBotHalf, yFlTop, yFlBot, cx] });
 
-    // sleeves (drawn here, on top of the flounce, hanging from the shoulders)
+    // sleeves — drawn on top of the flounce, angled outward into a gentle A-pose
+    // (cuffs sit further out than the shoulders, between straight-down and a T).
     if (!sleeveless) {
       [-1, 1].forEach(function (side) {
-        var topX = cx + side * flTopHalf;                 // attach at the flounce top corner
+        var sx = cx + side * (flTopHalf - 2);             // shoulder attach
         var shoulderW = 13;
-        var outerMax = topX + side * slBulge;             // widest point of the balloon
-        var innerMin = topX - side * 4;                   // inner edge, near the body
-        var cuffCenter = topX + side * (slBulge * 0.18);  // cuff drapes slightly outward
+        var spread = slBulge * 0.85 + 6;                  // how far the cuff swings out (the A)
+        var cuffCenter = sx + side * spread;              // cuff, outboard of the shoulder
+        var outerMax = sx + side * (slBulge * 1.1);       // widest point of the balloon
+        var innerMid = sx + side * (spread * 0.45);       // inner edge follows the tilt
         var path =
-          "M " + e(topX - side * shoulderW) + " " + e(ySlTop) +
-          " Q " + e(topX + side * shoulderW) + " " + e(ySlTop - 4) + " " + e(topX + side * shoulderW) + " " + e(ySlTop + 8) +
-          " C " + e(outerMax) + " " + e(ySlTop + 34) + ", " + e(outerMax) + " " + e(ySlMid - 18) + ", " + e(outerMax) + " " + e(ySlMid) +
-          " C " + e(outerMax) + " " + e(ySlMid + 48) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot - 22) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot) +
+          "M " + e(sx - side * shoulderW) + " " + e(ySlTop) +
+          " Q " + e(sx + side * shoulderW) + " " + e(ySlTop - 4) + " " + e(sx + side * shoulderW) + " " + e(ySlTop + 8) +
+          " C " + e(outerMax) + " " + e(ySlTop + 34) + ", " + e(outerMax) + " " + e(ySlMid - 14) + ", " + e(outerMax) + " " + e(ySlMid) +
+          " C " + e(outerMax) + " " + e(ySlMid + 46) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot - 22) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot) +
           " L " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot) +
-          " C " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot - 26) + ", " + e(innerMin) + " " + e(ySlMid + 32) + ", " + e(innerMin) + " " + e(ySlMid) +
-          " C " + e(innerMin) + " " + e(ySlMid - 40) + ", " + e(topX - side * shoulderW) + " " + e(ySlTop + 30) + ", " + e(topX - side * shoulderW) + " " + e(ySlTop) + " Z";
+          " C " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot - 26) + ", " + e(innerMid) + " " + e(ySlMid + 30) + ", " + e(innerMid) + " " + e(ySlMid) +
+          " C " + e(innerMid) + " " + e(ySlMid - 40) + ", " + e(sx - side * shoulderW) + " " + e(ySlTop + 30) + ", " + e(sx - side * shoulderW) + " " + e(ySlTop) + " Z";
         parts.push('<path d="' + path + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
         parts.push('<rect x="' + e(cuffCenter - cuffHalf) + '" y="' + e(ySlBot - 10) + '" width="' + e(2 * cuffHalf) + '" height="12" rx="4" fill="' + pal.capDeep + '"/>');
-        spotRegions.push({ x0: Math.min(innerMin, outerMax) + 5, x1: Math.max(innerMin, outerMax) - 5, y0: ySlTop + 16, y1: ySlMid + 24, density: 0.5 });
+        spotRegions.push({ x0: Math.min(innerMid, outerMax) + 5, x1: Math.max(innerMid, outerMax) - 5, y0: ySlTop + 16, y1: ySlMid + 24, density: 0.5 });
       });
     }
 
@@ -249,9 +251,9 @@ var CrochetViz = (function (Core) {
     return [Core.toCm(s.dotDia != null ? s.dotDia : 2.5, u)];
   }
 
-  function scatter(parts, region, radii, seed, pal) {
+  function scatter(parts, region, radii, seed, pal, clipId) {
     var rand = mulberry32(seed >>> 0);
-    var placed = [];
+    var placed = [], out = [];
     var area = Math.max(1, (region.x1 - region.x0) * (region.y1 - region.y0));
     var count = Math.floor(area / 2200) + 3;
     var attempts = 0, made = 0;
@@ -266,8 +268,11 @@ var CrochetViz = (function (Core) {
       }
       if (placed.some(function (p) { return (x - p[0]) * (x - p[0]) + (y - p[1]) * (y - p[1]) < (r + p[2] + 4) * (r + p[2] + 4); })) continue;
       placed.push([x, y, r]); made++;
-      parts.push('<ellipse cx="' + e(x) + '" cy="' + e(y) + '" rx="' + e(r) + '" ry="' + e(r * 0.92) + '" fill="' + pal.spot + '" opacity="0.96"/>');
+      out.push('<ellipse cx="' + e(x) + '" cy="' + e(y) + '" rx="' + e(r) + '" ry="' + e(r * 0.92) + '" fill="' + pal.spot + '" opacity="0.96"/>');
     }
+    if (!out.length) return;
+    // Clip to the garment outline so no spot bleeds onto the background.
+    parts.push(clipId ? '<g clip-path="url(#' + clipId + ')">' + out.join("") + "</g>" : out.join(""));
   }
 
   // ---- Mushroom-cap hat ----
@@ -291,10 +296,12 @@ var CrochetViz = (function (Core) {
     // brim disc
     parts.push('<ellipse cx="' + cx + '" cy="' + e(yBase) + '" rx="' + e(brimHalf) + '" ry="' + e(brimHalf * 0.26) + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
     // dome
-    parts.push('<path d="M ' + e(cx - headHalf) + ' ' + e(yBase) + ' A ' + e(headHalf) + ' ' + e(domeH) + ' 0 0 1 ' + e(cx + headHalf) + ' ' + e(yBase) + ' Z" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
-    // spots on the dome
+    var domePath = "M " + e(cx - headHalf) + " " + e(yBase) + " A " + e(headHalf) + " " + e(domeH) + " 0 0 1 " + e(cx + headHalf) + " " + e(yBase) + " Z";
+    parts.push('<defs><clipPath id="hatDome"><path d="' + domePath + '"/></clipPath></defs>');
+    parts.push('<path d="' + domePath + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    // spots on the dome (clipped to the dome so none bleed onto the brim/background)
     var radii = spotDiasCm(result, inp, Core, u).map(function (d) { return Math.max(4, (d / 2) * scale * 1.6); });
-    scatter(parts, { x0: cx - headHalf + 6, x1: cx + headHalf - 6, y0: yBase - domeH + 8, y1: yBase - 6, ellipse: true, cx: cx, cy: yBase, rx: headHalf, ry: domeH }, radii, Math.round(headDia * 31), pal);
+    scatter(parts, { x0: cx - headHalf + 6, x1: cx + headHalf - 6, y0: yBase - domeH + 8, y1: yBase - 6, ellipse: true, cx: cx, cy: yBase, rx: headHalf, ry: domeH }, radii, Math.round(headDia * 31), pal, "hatDome");
     parts.push('<text x="' + cx + '" y="' + (height - 18) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + pal.capDeep + '">bucket hat · head ' + esc(fmt(meta.headCirc, u)) + '</text>');
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket hat">' + parts.join("") + "</svg>";
   }
@@ -315,12 +322,14 @@ var CrochetViz = (function (Core) {
     // strap
     parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop + 6) + ' C ' + e(cx - half - 60) + ' ' + e(yTop - 120) + ', ' + e(cx + half + 60) + ' ' + e(yTop - 120) + ', ' + e(cx + half) + ' ' + e(yTop + 6) + '" fill="none" stroke="' + pal.cap + '" stroke-width="8" stroke-linecap="round"/>');
     // body
-    parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop) + ' L ' + e(cx - half) + ' ' + e(yBot) + ' A ' + e(half) + ' ' + e(ry) + ' 0 0 0 ' + e(cx + half) + ' ' + e(yBot) + ' L ' + e(cx + half) + ' ' + e(yTop) + ' Z" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    var bodyPath = "M " + e(cx - half) + " " + e(yTop) + " L " + e(cx - half) + " " + e(yBot) + " A " + e(half) + " " + e(ry) + " 0 0 0 " + e(cx + half) + " " + e(yBot) + " L " + e(cx + half) + " " + e(yTop) + " Z";
+    parts.push('<defs><clipPath id="bagBody"><path d="' + bodyPath + '"/></clipPath></defs>');
+    parts.push('<path d="' + bodyPath + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
     // base ellipse (front lip)
     parts.push('<path d="M ' + e(cx - half) + ' ' + e(yBot) + ' A ' + e(half) + ' ' + e(ry) + ' 0 0 0 ' + e(cx + half) + ' ' + e(yBot) + '" fill="none" stroke="' + pal.capDeep + '" stroke-width="2" opacity="0.5"/>');
-    // spots on the body
+    // spots on the body (clipped so none bleed off the sides onto the background)
     var radii = spotDiasCm(result, inp, Core, u).map(function (d) { return Math.max(4, (d / 2) * scale * 1.6); });
-    scatter(parts, { x0: cx - half + 6, x1: cx + half - 6, y0: yTop + 14, y1: yBot - 10 }, radii, Math.round(dia * 53), pal);
+    scatter(parts, { x0: cx - half + 6, x1: cx + half - 6, y0: yTop + 14, y1: yBot - 10 }, radii, Math.round(dia * 53), pal, "bagBody");
     // eyelet band + gathered top with drawstring
     parts.push('<rect x="' + e(cx - half) + '" y="' + e(yTop - 6) + '" width="' + e(2 * half) + '" height="12" fill="' + pal.capDeep + '" opacity="0.85"/>');
     for (var ei = 0; ei < 7; ei++) {
