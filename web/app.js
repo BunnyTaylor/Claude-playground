@@ -115,18 +115,17 @@ function setSelect(id, val) {
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
-async function generate() {
+// The engine runs entirely in the browser (crochet-core.js / crochet-viz.js),
+// so the app is a static site — no server, works offline and on GitHub Pages.
+function generate() {
   const { input, palette, ui } = gather();
   localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui }));
-  $("status").textContent = "computing…";
   try {
-    const res = await fetch("/api/pattern", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input, palette, schematic: $("schematic").checked }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    render(data);
+    let result = CrochetCore.computePattern(input);
+    result = CrochetCore.convertTerms(result, input.terms || "US");
+    result.svg = CrochetViz.renderDressSvg(result, input, palette, { schematic: $("schematic").checked });
+    result.yarn = CrochetCore.estimateYarn(result);
+    render(result);
     $("status").textContent = "updated";
   } catch (err) {
     $("status").textContent = "error: " + err.message;

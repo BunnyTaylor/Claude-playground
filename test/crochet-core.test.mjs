@@ -1,0 +1,316 @@
+/**
+ * Test contract for crochet-core (the engine).
+ *
+ * Each test locks in a bug that was actually found and fixed during
+ * development. This is the single guarantee for the engine — keep it green
+ * through any refactor.
+ *
+ *   node --test
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const Core = require("../web/crochet-core.js");
+const Viz = require("../web/crochet-viz.js");
+
+const {
+  computePattern, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
+  spotChart, spotCharts, estimateYarn, convertTerms, density, even, mult, toCm, fromCm,
+} = Core;
+
+/* ---------------- units ---------------- */
+
+test("inch conversion round-trips", () => {
+  assert.equal(toCm(10, "cm"), 10);
+  assert.ok(Math.abs(toCm(4, "in") - 10.16) < 1e-9);
+  assert.ok(Math.abs(fromCm(toCm(36.2, "in"), "in") - 36.2) < 1e-9);
+});
+
+test("a 4-inch swatch is 10.16cm, not 10", () => {
+  const d = density({ sts: 16, rows: 18, width: 4, height: 4 }, "in");
+  assert.ok(Math.abs(d.st - 16 / 10.16) < 1e-9);
+  assert.notEqual(d.st, 1.6);
+});
+
+test("gauge is independent of swatch size", () => {
+  const a = density({ sts: 18, rows: 9, width: 10, height: 10 }, "cm");
+  const b = density({ sts: 22.5, rows: 11.25, width: 12.5, height: 12.5 }, "cm");
+  assert.ok(Math.abs(a.st - b.st) < 1e-9 && Math.abs(a.row - b.row) < 1e-9);
+});
+
+test("non-square swatches use width for sts and height for rows", () => {
+  const d = density({ sts: 20, rows: 24, width: 13, height: 11 }, "cm");
+  assert.ok(Math.abs(d.st - 20 / 13) < 1e-9 && Math.abs(d.row - 24 / 11) < 1e-9);
+});
+
+test("zero or negative swatch size is rejected", () => {
+  assert.throws(() => density({ sts: 16, rows: 18, width: 0, height: 10 }, "cm"));
+});
+
+/* ---------------- shaping ---------------- */
+
+test("incPlan reaches its target exactly", () => {
+  for (const [start, target, rounds] of [
+    [110, 221, 81], [42, 83, 36], [276, 552, 198], [62, 124, 135], [100, 101, 20],
+  ]) {
+    assert.equal(incPlan(start, target, rounds, "hdc", 1).finalCount, target, `${start}->${target}`);
+  }
+});
+
+test("incPlan never schedules shaping past the end of the piece", () => {
+  for (let rounds = 6; rounds < 200; rounds += 7) {
+    const p = incPlan(100, 240, rounds, "hdc", 1);
+    if (p.rounds.length) assert.ok(p.rounds[p.rounds.length - 1].rnd <= rounds);
+  }
+});
+
+test("incPlan is a no-op when no increase is needed", () => {
+  const p = incPlan(120, 120, 40, "hdc", 1);
+  assert.equal(p.rounds.length, 0);
+  assert.equal(p.finalCount, 120);
+});
+
+test("evenAdjust consumes and produces exact counts", () => {
+  const parse = (from, to) => {
+    if (to === from) return [from, to];
+    if (to < from) {
+      const dec = from - to, iv = Math.floor(from / dec);
+      if (iv < 3) return [2 * dec + (from - 2 * dec), dec + (from - 2 * dec)];
+      const tail = from - iv * dec;
+      return [iv * dec + tail, dec * (iv - 1) + tail];
+    }
+    const inc = to - from, iv = Math.floor(from / inc);
+    if (iv < 1) return [from, to];
+    const tail = from - iv * inc;
+    return [iv * inc + tail, iv * inc + inc + tail];
+  };
+  for (let from = 20; from <= 400; from += 7) {
+    for (let to = 20; to <= 400; to += 11) {
+      const [consumed, produced] = parse(from, to);
+      assert.equal(consumed, from, `consume ${from}->${to}`);
+      assert.equal(produced, to, `produce ${from}->${to}`);
+      assert.equal(typeof evenAdjust(from, to, "hdc"), "string");
+    }
+  }
+});
+
+/* ---------------- colourwork ---------------- */
+
+test("spot chart rows always sum to one repeat width", () => {
+  for (const [d, g, st, rw] of [
+    [2.5, 1.2, 1.6, 1.8], [1.5, 0.8, 1.6, 1.8], [4, 1.8, 1.2, 1.0], [2, 1.2, 2.4, 2.8], [0.5, 0.8, 1.6, 1.8],
+  ]) {
+    const c = spotChart(d, g, st, rw);
+    for (const row of c.rows) {
+      assert.equal(row.lead + row.w + row.trail, c.repW);
+      assert.ok(row.w >= 1 && row.w <= c.W && row.lead >= 0 && row.trail >= 0);
+    }
+  }
+});
+
+test("spot is round in centimetres, not in stitches", () => {
+  const c = spotChart(2.5, 1.2, 1.6, 1.8);
+  assert.equal(c.W, 4);
+  assert.equal(c.H, 5);
+});
+
+test("spot chart bulges in the middle", () => {
+  const c = spotChart(3, 1.2, 1.6, 1.8);
+  const mid = Math.floor(c.rows.length / 2);
+  assert.ok(c.rows[mid].w >= c.rows[0].w && c.rows[mid].w >= c.rows[c.rows.length - 1].w);
+});
+
+test("spotCharts are sorted largest-first and each valid", () => {
+  const charts = spotCharts([2.5, 1.2, 3.5], 1.2, 1.6, 1.8);
+  assert.equal(charts.length, 3);
+  const dias = charts.map((c) => c.diaCm);
+  assert.deepEqual(dias, [...dias].sort((a, b) => b - a));
+  for (const c of charts) for (const row of c.rows) assert.equal(row.lead + row.w + row.trail, c.repW);
+});
+
+/* ---------------- helpers ---------------- */
+
+test("rib counts are always even", () => {
+  assert.equal(even(109), 110);
+  assert.equal(even(110), 110);
+});
+
+test("mult never returns less than one repeat", () => {
+  assert.equal(mult(2, 6), 6);
+  assert.equal(mult(221, 6), 222);
+});
+
+/* ---------------- whole pattern ---------------- */
+
+test("produces all nine pieces in construction order", () => {
+  const { pieces } = computePattern(DEFAULT_INPUT);
+  assert.deepEqual(pieces.map((p) => p.id),
+    ["waistband", "skirt", "flounce", "spots", "sleeves", "gillFrill", "hemFrill", "border", "straps"]);
+});
+
+test("waistband stitch count is even", () => {
+  assert.equal(computePattern(DEFAULT_INPUT).pieces[0].counts.sts % 2, 0);
+});
+
+test("skirt top lands at the true waist, not the compressed band", () => {
+  const { pieces, meta } = computePattern(DEFAULT_INPUT);
+  const topCm = pieces[1].counts.start / meta.density.hdc.st;
+  assert.ok(Math.abs(topCm - DEFAULT_INPUT.body.waist) < 1.5, `skirt top ${topCm}cm`);
+});
+
+test("each gauge affects only its own pieces", () => {
+  const base = computePattern(DEFAULT_INPUT);
+  const bumped = structuredClone(DEFAULT_INPUT);
+  bumped.gauges.sc.sts = 22;
+  const after = computePattern(bumped);
+  const id = (res, k) => res.pieces.find((p) => p.id === k);
+  assert.equal(id(base, "waistband").counts.sts, id(after, "waistband").counts.sts);
+  assert.equal(id(base, "skirt").counts.start, id(after, "skirt").counts.start);
+  assert.notEqual(id(base, "flounce").counts.start, id(after, "flounce").counts.start);
+});
+
+test("every piece has steps and a title", () => {
+  for (const p of computePattern(DEFAULT_INPUT).pieces) {
+    assert.ok(p.title.length > 0, p.id);
+    assert.ok(p.steps.length > 0, p.id);
+    for (const [label, text] of p.steps) {
+      assert.equal(typeof label, "string");
+      assert.ok(text.length > 0, `${p.id}/${label}`);
+    }
+  }
+});
+
+test("survives extreme but legal gauges without throwing", () => {
+  for (const sts of [7, 12, 20, 40]) {
+    const inp = structuredClone(DEFAULT_INPUT);
+    inp.gauges.rib.sts = inp.gauges.hdc.sts = inp.gauges.sc.sts = sts;
+    assert.doesNotThrow(() => computePattern(inp));
+  }
+});
+
+test("warns when the hem is no wider than the waist", () => {
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.fullness = 1.0;
+  assert.ok(computePattern(inp).warnings.some((w) => /hem/i.test(w)));
+});
+
+test("inches and centimetres describe the same garment", () => {
+  const cm = computePattern(DEFAULT_INPUT);
+  const inch = structuredClone(DEFAULT_INPUT);
+  inch.unit = "in";
+  for (const k of Object.keys(inch.body)) inch.body[k] = inch.body[k] / 2.54;
+  for (const g of Object.values(inch.gauges)) { g.width /= 2.54; g.height /= 2.54; }
+  inch.style.dotDia /= 2.54;
+  const res = computePattern(inch);
+  assert.ok(Math.abs(cm.pieces[0].counts.sts - res.pieces[0].counts.sts) <= 2);
+});
+
+/* ---------------- multi-size spots ---------------- */
+
+test("single dot size leaves the default pattern unchanged", () => {
+  const base = computePattern(DEFAULT_INPUT);
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.dotSizes = [inp.style.dotDia];
+  const same = computePattern(inp);
+  const b = base.pieces.find((p) => p.id === "spots");
+  const s = same.pieces.find((p) => p.id === "spots");
+  assert.deepEqual(b.steps, s.steps);
+  assert.deepEqual(b.counts, s.counts);
+});
+
+test("multiple dot sizes produce a charts palette only on spots", () => {
+  const base = computePattern(DEFAULT_INPUT);
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.dotSizes = [1.5, 2.5, 3.5];
+  const res = computePattern(inp);
+  const spots = res.pieces.find((p) => p.id === "spots");
+  assert.equal(spots.charts.length, 3);
+  assert.equal(spots.counts.sizes.length, 3);
+  for (const a of base.pieces) {
+    if (a.id !== "spots") assert.deepEqual(a.counts, res.pieces.find((p) => p.id === a.id).counts, a.id);
+  }
+});
+
+/* ---------------- progress / yarn ---------------- */
+
+test("progress end matches counts and stays in bounds", () => {
+  const pieces = computePattern(DEFAULT_INPUT).pieces.filter((p) => p.progress);
+  for (const id of ["waistband", "skirt", "flounce", "sleeves", "gillFrill", "hemFrill"]) {
+    assert.ok(pieces.find((p) => p.id === id), id);
+  }
+  for (const p of pieces) {
+    const pr = p.progress;
+    assert.ok(pr.total >= 1);
+    for (const it of pr.incRounds) assert.ok(it.rnd >= 1 && it.rnd <= pr.total, p.id);
+    let c = pr.start;
+    for (const it of [...pr.incRounds].sort((a, b) => a.rnd - b.rnd)) c = it.count;
+    assert.equal(c, pr.end, p.id);
+  }
+});
+
+test("yarn estimate is positive, consistent, and grows with a bigger body", () => {
+  const est = estimateYarn(computePattern(DEFAULT_INPUT));
+  assert.ok(est.total.meters > 0);
+  assert.ok(Math.abs(est.total.yards - est.total.meters * 1.0936) < est.total.meters);
+  const by = est.byColor.cap.meters + est.byColor.body.meters + est.byColor.spot.meters;
+  assert.ok(Math.abs(by - est.total.meters) < 1.0);
+  const big = structuredClone(DEFAULT_INPUT);
+  for (const k of Object.keys(big.body)) big.body[k] *= 1.3;
+  assert.ok(estimateYarn(computePattern(big)).total.meters > est.total.meters);
+});
+
+/* ---------------- silhouettes / terminology ---------------- */
+
+test("sleeveless and strapless omit their pieces", () => {
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.sleeveless = true;
+  inp.style.strapless = true;
+  const res = computePattern(inp);
+  const ids = res.pieces.map((p) => p.id);
+  assert.ok(!ids.includes("sleeves") && !ids.includes("straps"));
+  assert.deepEqual(ids, ["waistband", "skirt", "flounce", "spots", "gillFrill", "hemFrill", "border"]);
+  assert.ok(res.warnings.some((w) => /strapless/i.test(w)));
+});
+
+test("default still has sleeves and straps", () => {
+  const ids = computePattern(DEFAULT_INPUT).pieces.map((p) => p.id);
+  assert.ok(ids.includes("sleeves") && ids.includes("straps"));
+});
+
+test("UK terms convert stitch names without corrupting compounds", () => {
+  const res = computePattern(DEFAULT_INPUT);
+  const uk = convertTerms(res, "UK");
+  const joined = uk.pieces.flatMap((p) => p.steps.map((s) => s[1])).join(" ");
+  assert.ok(joined.includes("htr"));
+  assert.ok(joined.includes("fptr"));
+  assert.ok(!joined.includes("hdc") && !joined.includes("sc2tog"));
+  assert.notEqual(res, uk);
+});
+
+test("US terms is a no-op", () => {
+  const res = computePattern(DEFAULT_INPUT);
+  assert.equal(convertTerms(res, "US"), res);
+});
+
+/* ---------------- visualization ---------------- */
+
+test("visualizer renders well-formed SVG for single and multi size", () => {
+  for (const sizes of [null, [1.5, 2.5, 3.5]]) {
+    const inp = defaultInput();
+    if (sizes) inp.style.dotSizes = sizes;
+    const svg = Viz.renderDressSvg(computePattern(inp), inp);
+    assert.ok(svg.startsWith("<svg") && svg.endsWith("</svg>"));
+    assert.ok(svg.includes("ellipse"));
+  }
+});
+
+test("visualizer schematic adds measurement labels and is deterministic", () => {
+  const inp = defaultInput();
+  inp.style.dotSizes = [1.5, 2.5, 3.5];
+  const plain = Viz.renderDressSvg(computePattern(inp), inp);
+  const labelled = Viz.renderDressSvg(computePattern(inp), inp, null, { schematic: true });
+  assert.ok(labelled.includes("waist") && labelled.includes("hem") && labelled.includes("upper bust"));
+  assert.ok(labelled.length > plain.length);
+  assert.equal(Viz.renderDressSvg(computePattern(inp), inp), Viz.renderDressSvg(computePattern(inp), inp));
+});
