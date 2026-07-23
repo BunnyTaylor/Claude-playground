@@ -138,27 +138,37 @@ var CrochetViz = (function (Core) {
 
     spotRegions.push({ x0: cx - flBotHalf + 8, x1: cx + flBotHalf - 8, y0: yFlTop + 12, y1: yFlBot - 8, density: 1.0, taper: [flTopHalf, flBotHalf, yFlTop, yFlBot, cx] });
 
-    // sleeves — drawn on top of the flounce, angled outward into a gentle A-pose
-    // (cuffs sit further out than the shoulders, between straight-down and a T).
+    // sleeves — a lantern built along a tilted axis (down-and-out ~30°) so the
+    // arms read as an A-pose rather than hanging straight down. Drawn on top of
+    // the flounce.
     if (!sleeveless) {
       [-1, 1].forEach(function (side) {
-        var sx = cx + side * (flTopHalf - 2);             // shoulder attach
-        var shoulderW = 13;
-        var spread = slBulge * 0.85 + 6;                  // how far the cuff swings out (the A)
-        var cuffCenter = sx + side * spread;              // cuff, outboard of the shoulder
-        var outerMax = sx + side * (slBulge * 1.1);       // widest point of the balloon
-        var innerMid = sx + side * (spread * 0.45);       // inner edge follows the tilt
+        var a = 0.52;                                     // ~30° from vertical
+        var ux = side * Math.sin(a), uy = Math.cos(a);    // unit vector along the arm (down + out)
+        var px = side * Math.cos(a), py = -Math.sin(a);   // unit vector across the arm (outward)
+        var alen = Math.min(slLen, 172);
+        var sX = cx + side * (flTopHalf - 2), sY = ySlTop + 2;   // shoulder
+        var shoulderW = 12, bw = slBulge * 1.05, cw = cuffHalf;
+        var along = function (t) { return [sX + ux * alen * t, sY + uy * alen * t]; };
+        var off = function (p, al, pe) { return [p[0] + ux * al + px * pe, p[1] + uy * al + py * pe]; };
+        var P = function (p) { return e(p[0]) + " " + e(p[1]); };
+        var S0 = along(0), Mm = along(0.46), Kk = along(1);
+        var sIn = off(S0, 0, -shoulderW), sOut = off(S0, 0, shoulderW);
+        var bOut = off(Mm, 0, bw), bIn = off(Mm, 0, -bw * 0.55);
+        var kOut = off(Kk, 0, cw), kIn = off(Kk, 0, -cw);
         var path =
-          "M " + e(sx - side * shoulderW) + " " + e(ySlTop) +
-          " Q " + e(sx + side * shoulderW) + " " + e(ySlTop - 4) + " " + e(sx + side * shoulderW) + " " + e(ySlTop + 8) +
-          " C " + e(outerMax) + " " + e(ySlTop + 34) + ", " + e(outerMax) + " " + e(ySlMid - 14) + ", " + e(outerMax) + " " + e(ySlMid) +
-          " C " + e(outerMax) + " " + e(ySlMid + 46) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot - 22) + ", " + e(cuffCenter + side * cuffHalf) + " " + e(ySlBot) +
-          " L " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot) +
-          " C " + e(cuffCenter - side * cuffHalf) + " " + e(ySlBot - 26) + ", " + e(innerMid) + " " + e(ySlMid + 30) + ", " + e(innerMid) + " " + e(ySlMid) +
-          " C " + e(innerMid) + " " + e(ySlMid - 40) + ", " + e(sx - side * shoulderW) + " " + e(ySlTop + 30) + ", " + e(sx - side * shoulderW) + " " + e(ySlTop) + " Z";
+          "M " + P(sIn) +
+          " Q " + P(off(S0, -8, shoulderW * 1.3)) + " " + P(sOut) +
+          " C " + P(off(Mm, -alen * 0.28, bw)) + ", " + P(off(Mm, alen * 0.30, bw)) + ", " + P(kOut) +
+          " L " + P(kIn) +
+          " C " + P(off(Mm, alen * 0.30, -bw * 0.55)) + ", " + P(off(Mm, -alen * 0.28, -bw * 0.55)) + ", " + P(sIn) +
+          " Z";
         parts.push('<path d="' + path + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
-        parts.push('<rect x="' + e(cuffCenter - cuffHalf) + '" y="' + e(ySlBot - 10) + '" width="' + e(2 * cuffHalf) + '" height="12" rx="4" fill="' + pal.capDeep + '"/>');
-        spotRegions.push({ x0: Math.min(innerMid, outerMax) + 5, x1: Math.max(innerMid, outerMax) - 5, y0: ySlTop + 16, y1: ySlMid + 24, density: 0.5 });
+        parts.push('<line x1="' + e(kIn[0]) + '" y1="' + e(kIn[1]) + '" x2="' + e(kOut[0]) + '" y2="' + e(kOut[1]) + '" stroke="' + pal.capDeep + '" stroke-width="9" stroke-linecap="round"/>');
+        spotRegions.push({
+          x0: Math.min(sIn[0], bIn[0], bOut[0]) + 4, x1: Math.max(sOut[0], bIn[0], bOut[0]) - 4,
+          y0: S0[1] + 10, y1: Mm[1] + 22, density: 0.5,
+        });
       });
     }
 
