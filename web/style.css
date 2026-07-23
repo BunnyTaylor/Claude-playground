@@ -114,6 +114,21 @@ input[type=color]{width:40px;height:38px;padding:2px;border:1.5px solid var(--li
 .step .lb{flex:0 0 92px;font-weight:700;color:var(--amanita);font-size:12px;}
 .step .tx{flex:1;line-height:1.45;}
 
+.chk{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;padding:8px 0;}
+.chk input{width:16px;height:16px;accent-color:var(--amanita);cursor:pointer;}
+
+/* reference box */
+.refbox{background:var(--spore);border:1.5px solid var(--line);border-radius:14px;padding:4px 16px;margin-top:18px;
+  box-shadow:0 8px 24px -20px rgba(74,46,42,.5);}
+.refbox summary{cursor:pointer;font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--amanita-deep);padding:12px 0;}
+.refgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 18px;font-size:12.5px;padding:4px 0 12px;}
+.refgrid b{color:var(--amanita);}
+table.uk{width:100%;border-collapse:collapse;font-size:12.5px;margin:0 0 14px;}
+table.uk th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);
+  padding:5px 8px 5px 0;border-bottom:1.5px solid var(--line);}
+table.uk td{padding:5px 8px 5px 0;border-bottom:1px dashed var(--line);}
+table.uk td:first-child{font-weight:700;color:var(--amanita-deep);}
+
 /* row counter */
 .counter{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--line);
   border-radius:12px;padding:7px 8px;margin-bottom:10px;}

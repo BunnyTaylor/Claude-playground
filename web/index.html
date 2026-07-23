@@ -45,10 +45,21 @@
         <h2>Your numbers</h2>
         <p class="sub">Swatch first — every count depends on it.</p>
 
-        <div class="group-label">Units</div>
-        <div class="seg" id="unitSeg">
-          <button data-unit="cm" class="on">cm</button>
-          <button data-unit="in">inches</button>
+        <div class="two">
+          <div>
+            <div class="group-label">Units</div>
+            <div class="seg" id="unitSeg">
+              <button data-unit="cm" class="on">cm</button>
+              <button data-unit="in">inches</button>
+            </div>
+          </div>
+          <div>
+            <div class="group-label">Terms</div>
+            <div class="seg" id="termsSeg">
+              <button data-terms="US" class="on">US</button>
+              <button data-terms="UK">UK</button>
+            </div>
+          </div>
         </div>
 
         <div class="group-label">Colours &amp; spots</div>
@@ -128,6 +139,11 @@
           <div class="field"><label>Sleeve volume</label>
             <select id="balloon"><option value="1.25">Gentle (1.25×)</option><option value="1.4" selected>Lantern (1.4×)</option><option value="1.6">Balloon (1.6×)</option></select></div>
         </div>
+        <div class="group-label">Silhouette</div>
+        <div class="two">
+          <label class="chk"><input type="checkbox" id="sleeveless"> Sleeveless</label>
+          <label class="chk"><input type="checkbox" id="strapless"> Strapless</label>
+        </div>
       </div>
     </div>
 
@@ -145,6 +161,13 @@
       <div id="warnings"></div>
       <div id="yarn"></div>
       <div class="cards" id="cards"></div>
+
+      <details class="refbox" id="abbr">
+        <summary>Abbreviations &amp; US ↔ UK terms</summary>
+        <div class="refgrid" id="abbrGrid"></div>
+        <table class="uk" id="ukTable"></table>
+      </details>
+
       <p class="foot">
         Starting counts from your gauge — crochet relaxes and stretches, so try pieces on as you go,
         especially the waistband and cuffs. Written in US crochet terms.

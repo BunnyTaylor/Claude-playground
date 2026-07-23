@@ -9,6 +9,7 @@ const LS_WORKING = "mushroom.working.v1";
 const LS_PROGRESS = "mushroom.progress.v1";
 
 let unit = "cm";
+let terms = "US";
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
 let LAST = null;             // most recent /api/pattern response
@@ -44,6 +45,8 @@ function gather() {
   };
   // one size -> uniform tapestry bands; several -> a scattered mix
   if (sizes.length > 1) style.dotSizes = sizes;
+  if ($("sleeveless").checked) style.sleeveless = true;
+  if ($("strapless").checked) style.strapless = true;
 
   const colors = {
     cap: ($("capName").value || "").trim() || "cap colour",
@@ -53,7 +56,7 @@ function gather() {
   const palette = { cap: $("capCol").value, spot: $("spotCol").value, body: $("bodyCol").value };
 
   return {
-    input: { unit, gauges, body, style, colors },
+    input: { unit, terms, gauges, body, style, colors },
     palette,
     ui: {
       name: $("pName").value,
@@ -71,6 +74,10 @@ function apply(state) {
   const { input, ui } = state;
   unit = input.unit || "cm";
   for (const btn of $("unitSeg").children) btn.classList.toggle("on", btn.dataset.unit === unit);
+  terms = input.terms || "US";
+  for (const btn of $("termsSeg").children) btn.classList.toggle("on", btn.dataset.terms === terms);
+  $("sleeveless").checked = !!(input.style && input.style.sleeveless);
+  $("strapless").checked = !!(input.style && input.style.strapless);
 
   for (const g of GAUGES) {
     $(g + "Sts").value = input.gauges[g].sts;
@@ -310,6 +317,15 @@ function wire() {
     });
   }
 
+  for (const btn of $("termsSeg").children) {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.terms === terms) return;
+      terms = btn.dataset.terms;
+      for (const b of $("termsSeg").children) b.classList.toggle("on", b.dataset.terms === terms);
+      generate();
+    });
+  }
+
   $("saveBtn").addEventListener("click", saveCurrent);
   $("newBtn").addEventListener("click", () => {
     activeId = null;
@@ -397,10 +413,29 @@ function downloadSVG() {
   URL.revokeObjectURL(a.href);
 }
 
+function fillReference() {
+  const abbr = [
+    ["ch", "chain"], ["sl st", "slip stitch"], ["sc", "single crochet"],
+    ["hdc", "half double crochet"], ["dc", "double crochet"], ["tr", "treble"],
+    ["fpdc", "front post dc"], ["bpdc", "back post dc"], ["2tog", "2 stitches together (decrease)"],
+    ["rep", "repeat"], ["sk", "skip"], ["rnd", "round"], ["rem", "remaining"],
+    ["join", "sl st to first st of round"], ["* … *", "repeat between the stars"],
+  ];
+  $("abbrGrid").innerHTML = abbr.map(([a, m]) => `<div><b>${a}</b> — ${m}</div>`).join("");
+  const rows = [
+    ["US term", "UK term"], ["sc — single crochet", "dc — double crochet"],
+    ["hdc — half double", "htr — half treble"], ["dc — double crochet", "tr — treble"],
+    ["tr — treble", "dtr — double treble"], ["sl st — slip stitch", "ss — slip stitch"],
+  ];
+  $("ukTable").innerHTML = rows.map((r, i) =>
+    i === 0 ? `<tr><th>${r[0]}</th><th>${r[1]}</th></tr>` : `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`
+  ).join("");
+}
+
 function DEFAULT_STATE() {
   return {
     input: {
-      unit: "cm",
+      unit: "cm", terms: "US",
       gauges: {
         rib: { sts: 18, rows: 9, width: 10, height: 10 },
         hdc: { sts: 14, rows: 11, width: 10, height: 10 },
@@ -418,6 +453,7 @@ function DEFAULT_STATE() {
 
 (function boot() {
   wire();
+  fillReference();
   let working = null;
   try { working = JSON.parse(localStorage.getItem(LS_WORKING)); } catch { working = null; }
   if (working && working.input) apply(working);

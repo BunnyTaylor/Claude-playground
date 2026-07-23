@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import copy
 import math
+import re
 from typing import Any, Dict, List
 
 # ------------------------------------------------------------------ #
@@ -478,15 +479,16 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         sleeve_inc.append({"rnd": straight_to + 1, "count": top_sts})
         sleeve_end = top_sts
     sleeve_steps.append(["Finish", "Fasten off. Thread elastic through the final round."])
-    pieces.append({
-        "id": "sleeves",
-        "title": "Lantern sleeves ×2",
-        "stitch": "in the round, cuff up · rib + sc",
-        "counts": {"cuff": cuff_sts, "balloon": bal_sts, "top": top_sts, "rounds": sl_rnds},
-        "progress": {"total": sl_rnds, "start": cuff_sts, "end": sleeve_end, "incRounds": sleeve_inc},
-        "steps": sleeve_steps,
-        "makeCount": 2,
-    })
+    if not S.get("sleeveless"):
+        pieces.append({
+            "id": "sleeves",
+            "title": "Lantern sleeves ×2",
+            "stitch": "in the round, cuff up · rib + sc",
+            "counts": {"cuff": cuff_sts, "balloon": bal_sts, "top": top_sts, "rounds": sl_rnds},
+            "progress": {"total": sl_rnds, "start": cuff_sts, "end": sleeve_end, "incRounds": sleeve_inc},
+            "steps": sleeve_steps,
+            "makeCount": 2,
+        })
 
     # --- 6. gill frill ---
     gill_base = mult(fl_plan["finalCount"], 6)
@@ -544,19 +546,22 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
     # --- 9. straps ---
     strap_len = 48
     strap_sts = _jsround(strap_len * sc["st"])
-    pieces.append({
-        "id": "straps",
-        "title": "Bowtie shoulder straps ×2",
-        "stitch": "flat · sc",
-        "counts": {"chain": strap_sts + 3, "sts": strap_sts + 2, "length": strap_len},
-        "steps": [
-            ["Make 2", f"In {C['cap']}, ch {strap_sts + 3}. Sc in 2nd ch from hook and each ch across. ({strap_sts + 2} sc)"],
-            ["Rows 2–3", "Ch 1, turn, sc across. Rep once."],
-            ["Attach", "Sew to the front and back of the flounce; tie in bows at the shoulders."],
-            ["Blocking", "Wet-block the whole dress, easing both frills open."],
-        ],
-        "makeCount": 2,
-    })
+    if not S.get("strapless"):
+        pieces.append({
+            "id": "straps",
+            "title": "Bowtie shoulder straps ×2",
+            "stitch": "flat · sc",
+            "counts": {"chain": strap_sts + 3, "sts": strap_sts + 2, "length": strap_len},
+            "steps": [
+                ["Make 2", f"In {C['cap']}, ch {strap_sts + 3}. Sc in 2nd ch from hook and each ch across. ({strap_sts + 2} sc)"],
+                ["Rows 2–3", "Ch 1, turn, sc across. Rep once."],
+                ["Attach", "Sew to the front and back of the flounce; tie in bows at the shoulders."],
+                ["Blocking", "Wet-block the whole dress, easing both frills open."],
+            ],
+            "makeCount": 2,
+        })
+    if S.get("strapless"):
+        warnings.append("Strapless: the flounce is held up by elastic and negative ease alone — test it stays up before committing.")
 
     # --- fit warnings the maker genuinely needs ---
     if hip > 0 and wb_circ * 1.35 < hip:
@@ -672,6 +677,37 @@ def estimate_yarn(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# US -> UK stitch-name map. Compound tokens are listed before their prefixes
+# so the alternation matches them first; \b boundaries stop 'dc' matching
+# inside 'hdc' or 'fpdc'.
+_US_TO_UK = {
+    "sc2tog": "dc2tog", "hdc2tog": "htr2tog", "dc2tog": "tr2tog",
+    "fpdc": "fptr", "bpdc": "bptr",
+    "sc": "dc", "hdc": "htr", "dc": "tr", "tr": "dtr",
+}
+_US_TOKEN_RE = re.compile(r"\b(sc2tog|hdc2tog|dc2tog|fpdc|bpdc|hdc|sc|dc|tr)\b")
+
+
+def convert_terms(result: Dict[str, Any], terms: str = "US") -> Dict[str, Any]:
+    """Return the pattern with stitch names in US or UK terminology.
+
+    The engine writes US terms (sc, hdc, dc…). ``terms="UK"`` rewrites the
+    written instructions to UK equivalents (dc, htr, tr…) in a single pass,
+    so 'dc2tog' becomes 'tr2tog' — not 'tr2tog' via a cascade. Anything else
+    returns the result unchanged.
+    """
+    if terms != "UK":
+        return result
+    out = copy.deepcopy(result)
+    conv = lambda s: _US_TOKEN_RE.sub(lambda m: _US_TO_UK[m.group(0)], s)
+    for p in out["pieces"]:
+        p["title"] = conv(p["title"])
+        p["stitch"] = conv(p["stitch"])
+        p["steps"] = [[conv(lbl), conv(txt)] for lbl, txt in p["steps"]]
+    out["meta"]["terms"] = "UK"
+    return out
+
+
 # Backwards-compatible aliases mirroring the JS export names, so the test
 # contract can import the same identifiers.
 computePattern = compute_pattern
@@ -680,5 +716,6 @@ evenAdjust = even_adjust
 spotChart = spot_chart
 spotCharts = spot_charts
 estimateYarn = estimate_yarn
+convertTerms = convert_terms
 toCm = to_cm
 fromCm = from_cm

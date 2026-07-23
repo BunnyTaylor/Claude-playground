@@ -70,6 +70,9 @@ python3 crochet_cli.py --rib-sts 20 --rib-w 9 --rib-rows 11 --rib-h 10
 # Spots in several sizes (a scattered, mixed look) + a saved picture
 python3 crochet_cli.py --dot-sizes 1.5,2.5,3.5 --svg dress.svg
 
+# Alternative silhouette, UK terms, with a yarn estimate
+python3 crochet_cli.py --sleeveless --strapless --terms UK --yarn
+
 # One piece only, or machine-readable output
 python3 crochet_cli.py --piece sleeves
 python3 crochet_cli.py --json > pattern.json
@@ -113,6 +116,22 @@ fitted waist, A-line skirt, scallop frills and hem mushrooms — scaled from the
 real circumferences, with spots scattered in whatever sizes the design uses
 (seeded, so the same input always draws the same picture). The web UI shows it
 live; the CLI writes it with `--svg`; call it directly for your own renderer.
+
+## Silhouettes & terminology
+
+The same engine drives alternative silhouettes via `style` toggles, and the
+written pattern can be produced in either terminology:
+
+```python
+inp["style"]["sleeveless"] = True   # omit the sleeves
+inp["style"]["strapless"]  = True   # omit the straps (flounce held by elastic)
+inp["terms"] = "UK"                 # sc→dc, hdc→htr, dc→tr … (default "US")
+```
+
+`convert_terms(result, "UK")` rewrites the finished pattern's stitch names in a
+single pass (so `dc2tog` → `tr2tog`, never a cascade). The web UI exposes both
+as controls and includes an abbreviations / US↔UK reference; the CLI has
+`--sleeveless`, `--strapless`, and `--terms`.
 
 ## Yarn estimate
 
@@ -207,13 +226,14 @@ repeat 9 × 10; sleeves 32 rib → 67 balloon.
 
 ## What's next
 
-The engine, CLI, web UI, visualization, multi-size spots and in-browser
-project persistence are all done. Natural next steps, roughly in value order:
+Done so far: the engine, CLI, web UI, dress visualization, multi-size spots,
+in-browser persistence, per-piece row counter, yarn estimate, project
+export/import, sleeveless/strapless silhouettes, and US/UK terminology.
 
-1. **Row counter / progress tracking** — the pattern is ~250 rounds; a
-   per-piece counter that knows which round is an increase round (and shows the
-   running stitch count) beats a paper printout while actually making it.
-2. **Yarn / yardage estimate** per piece.
-3. **Editable spot layout** — drag spots on the preview, save custom scatters.
-4. **Alternative silhouettes** from the same engine (sleeveless, midi, tiered).
-5. Export the project (JSON) to move it between browsers/devices.
+Natural next steps, roughly in value order:
+
+1. **Editable spot layout** — drag spots on the preview, save custom scatters.
+2. **More silhouettes** — tiered skirt, midi/maxi presets, high-neck variant.
+3. **Schematic measurements** — label the finished dimensions on the SVG.
+4. **Proper PDF export** (currently the browser's print dialog).
+5. **Photo progress log** per project, alongside the row counter.

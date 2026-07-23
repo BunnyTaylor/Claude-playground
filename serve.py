@@ -25,7 +25,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from crochet_core import compute_pattern, estimate_yarn
+from crochet_core import compute_pattern, estimate_yarn, convert_terms
 from crochet_viz import render_dress_svg
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -77,6 +77,7 @@ class Handler(BaseHTTPRequestHandler):
         palette = payload.get("palette")
         try:
             result = compute_pattern(inp)
+            result = convert_terms(result, (inp.get("terms") or "US"))
             svg = render_dress_svg(result, inp, palette)
         except ValueError as exc:
             return self._json(422, {"error": str(exc)})

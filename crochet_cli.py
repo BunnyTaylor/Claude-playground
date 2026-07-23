@@ -82,6 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--config", metavar="FILE", help="load a JSON config as the base input")
     p.add_argument("--unit", choices=["cm", "in"], help="measurement unit (default cm)")
+    p.add_argument("--terms", choices=["US", "UK"], help="crochet terminology (default US)")
+    p.add_argument("--sleeveless", action="store_true", help="omit the sleeves")
+    p.add_argument("--strapless", action="store_true", help="omit the shoulder straps")
 
     b = p.add_argument_group("body measurements")
     for flag in _BODY:
@@ -128,6 +131,10 @@ def resolve_input(args: argparse.Namespace) -> Dict[str, Any]:
 
     if args.unit:
         inp["unit"] = args.unit
+    if getattr(args, "sleeveless", False):
+        inp["style"]["sleeveless"] = True
+    if getattr(args, "strapless", False):
+        inp["style"]["strapless"] = True
     for flag, key in _BODY.items():
         if getattr(args, flag) is not None:
             inp["body"][key] = getattr(args, flag)
@@ -272,7 +279,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
+        from crochet_core import convert_terms
         result = compute_pattern(inp)
+        result = convert_terms(result, args.terms or "US")
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -14,7 +14,8 @@ import math
 
 from crochet_core import (
     compute_pattern, default_input, DEFAULT_INPUT, inc_plan, even_adjust,
-    spot_chart, spot_charts, estimate_yarn, density, even, mult, to_cm, from_cm,
+    spot_chart, spot_charts, estimate_yarn, convert_terms,
+    density, even, mult, to_cm, from_cm,
 )
 
 # The JS suite reaches into DEFAULT_INPUT via structuredClone; we deep-copy.
@@ -311,6 +312,47 @@ def test_yarn_estimate_grows_with_a_bigger_body():
     for k in big["body"]:
         big["body"][k] *= 1.3
     assert estimate_yarn(compute_pattern(big))["total"]["meters"] > small["total"]["meters"]
+
+
+# ---------------- silhouettes ----------------
+
+def test_sleeveless_and_strapless_omit_their_pieces():
+    inp = copy.deepcopy(DEFAULT_INPUT)
+    inp["style"]["sleeveless"] = True
+    inp["style"]["strapless"] = True
+    res = compute_pattern(inp)
+    ids = [p["id"] for p in res["pieces"]]
+    assert "sleeves" not in ids
+    assert "straps" not in ids
+    # the rest of the garment is still there and still ordered
+    assert ids == ["waistband", "skirt", "flounce", "spots", "gillFrill", "hemFrill", "border"]
+    assert any("strapless" in w.lower() for w in res["warnings"])
+
+
+def test_default_still_has_sleeves_and_straps():
+    ids = [p["id"] for p in compute_pattern(DEFAULT_INPUT)["pieces"]]
+    assert "sleeves" in ids and "straps" in ids
+
+
+# ---------------- terminology ----------------
+
+def test_uk_terms_convert_stitch_names_without_corrupting_compounds():
+    res = compute_pattern(DEFAULT_INPUT)
+    uk = convert_terms(res, "UK")
+    joined = " ".join(t for p in uk["pieces"] for _, t in p["steps"])
+    # US sc -> UK dc; US hdc -> UK htr; US dc -> UK tr
+    assert "htr" in joined            # from hdc
+    assert "tr in each" in joined or "tr," in joined or " tr " in joined  # from dc
+    # compounds map atomically, never leaving a stray US token
+    assert "hdc" not in joined and "sc2tog" not in joined
+    # US default is untouched
+    assert res is not uk
+    assert any("hdc" in t for p in res["pieces"] for _, t in p["steps"])
+
+
+def test_us_terms_is_a_no_op():
+    res = compute_pattern(DEFAULT_INPUT)
+    assert convert_terms(res, "US") is res
 
 
 # ---------------- visualization ----------------
