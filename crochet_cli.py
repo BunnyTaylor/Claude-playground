@@ -104,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     o = p.add_argument_group("output")
     o.add_argument("--piece", metavar="ID", help="show only one piece (e.g. skirt, sleeves)")
+    o.add_argument("--yarn", action="store_true", help="append a rough yarn estimate")
     o.add_argument("--json", action="store_true", help="emit the full result as JSON")
     o.add_argument("--svg", metavar="FILE", help="also write an SVG dress visualization to FILE")
     o.add_argument("--dump-config", metavar="FILE", help="write the resolved input to FILE and exit")
@@ -294,7 +295,28 @@ def main(argv: list[str] | None = None) -> int:
     enabled = (not args.no_color) and sys.stdout.isatty()
     sty = Style(enabled)
     print(render(result, inp, sty, args.piece, not args.no_chart))
+    if args.yarn and not args.piece:
+        print()
+        print(render_yarn(result, sty))
     return 0
+
+
+def render_yarn(result: Dict[str, Any], sty: Style) -> str:
+    from crochet_core import estimate_yarn
+    y = estimate_yarn(result)
+    u = y["unit"]
+    prefer_yd = u == "in"
+
+    def amt(c) -> str:
+        return f"{c['yards']} yd" if prefer_yd else f"{c['meters']} m"
+
+    out = [sty.head("  YARN ESTIMATE") + sty.dim(f"  (rough · +{y['wastePct']}% for ends & joins)")]
+    for k in ("cap", "body", "spot"):
+        c = y["byColor"].get(k)
+        if c and c["meters"] > 0:
+            out.append(f"    {sty.bold(c['name'].ljust(14))} {amt(c)}")
+    out.append(sty.moss(f"    {'total'.ljust(14)} {amt(y['total'])}"))
+    return "\n".join(out)
 
 
 if __name__ == "__main__":

@@ -329,6 +329,7 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "title": "Fitted waistband",
         "stitch": "in the round · fpdc/bpdc rib",
         "counts": {"sts": wb_sts, "rounds": wb_rnds, "circumference": wb_circ},
+        "progress": {"total": wb_rnds, "start": wb_sts, "end": wb_sts, "incRounds": []},
         "steps": [
             ["Foundation", f"Ch {wb_sts}. Taking care not to twist, join with sl st to form a ring."],
             ["Rnd 1", f"Ch 1, sc in each ch around, join. ({wb_sts} sc)"],
@@ -352,6 +353,8 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "title": "A-line skirt",
         "stitch": "in the round, downward · hdc",
         "counts": {"start": sk_start, "end": sk_plan["finalCount"], "rounds": sk_rnds, "incRounds": len(sk_plan["rounds"])},
+        "progress": {"total": sk_rnds, "start": sk_start, "end": sk_plan["finalCount"],
+                     "incRounds": [{"rnd": x["rnd"], "count": x["after"]} for x in sk_plan["rounds"]]},
         "steps": [
             ["Set-up", f"Join to the lower edge of the waistband. Ch 2, {sk_join}, join. ({wb_sts} rib sts → {sk_start} hdc)"],
             ["Plain rnds", "Ch 2, hdc in each st around, join. Rep for every round not listed."],
@@ -370,6 +373,8 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "title": "Off-shoulder flounce",
         "stitch": "in the round · sc tapestry",
         "counts": {"start": fl_top, "end": fl_plan["finalCount"], "rounds": fl_rnds},
+        "progress": {"total": fl_rnds, "start": fl_top, "end": fl_plan["finalCount"],
+                     "incRounds": [{"rnd": x["rnd"], "count": x["after"]} for x in fl_plan["rounds"]]},
         "steps": [
             ["Foundation", f"In {C['cap']}, ch {fl_top}. Join to form a ring, not twisting."],
             ["Rnd 1", f"Ch 1, sc in each ch around, join. ({fl_top} sc)"],
@@ -454,24 +459,31 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
     ]
     cur = sc_cuff
     rnd = cuff_rnds + 1
+    sleeve_inc = [{"rnd": cuff_rnds + 1, "count": sc_cuff}]  # rib cuff → sc body
     if bal_sts > sc_cuff * 2:
         rnd += 1
         sleeve_steps.append([f"Rnd {rnd}", f"Ch 1, 2 sc in each st around, join. ({sc_cuff * 2} sc)"])
         cur = sc_cuff * 2
+        sleeve_inc.append({"rnd": rnd, "count": cur})
     if bal_sts > cur:
         rnd += 1
         sleeve_steps.append([f"Rnd {rnd}", f"Ch 1, {even_adjust(cur, bal_sts, 'sc')}, join. ({bal_sts} sc)"])
         cur = bal_sts
+        sleeve_inc.append({"rnd": rnd, "count": cur})
     straight_to = max(rnd + 1, sl_rnds - 2)
     sleeve_steps.append([f"Rnds {rnd + 1}–{straight_to}", f"Ch 1, sc around, join. Work spots as charted. ({cur} sc)"])
+    sleeve_end = cur
     if cur > top_sts:
         sleeve_steps.append([f"Rnd {straight_to + 1}", f"Ch 1, {even_adjust(cur, top_sts, 'sc')}, join. ({top_sts} sc)"])
+        sleeve_inc.append({"rnd": straight_to + 1, "count": top_sts})
+        sleeve_end = top_sts
     sleeve_steps.append(["Finish", "Fasten off. Thread elastic through the final round."])
     pieces.append({
         "id": "sleeves",
         "title": "Lantern sleeves ×2",
         "stitch": "in the round, cuff up · rib + sc",
         "counts": {"cuff": cuff_sts, "balloon": bal_sts, "top": top_sts, "rounds": sl_rnds},
+        "progress": {"total": sl_rnds, "start": cuff_sts, "end": sleeve_end, "incRounds": sleeve_inc},
         "steps": sleeve_steps,
         "makeCount": 2,
     })
@@ -484,6 +496,7 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "title": "Gill frill (under flounce)",
         "stitch": "in the round · shell edging",
         "counts": {"base": gill_base, "rounds": gill_rnds + 2, "shells": gill_base // 6},
+        "progress": {"total": gill_rnds + 2, "start": gill_base, "end": gill_base, "incRounds": []},
         "steps": [
             ["Set-up", f"In {C['body']}, join to the flounce edge. Sc evenly around to {gill_base} sc (multiple of 6). Join."],
             ["Body", f"Ch 1, sc around, join. Rep to Rnd {gill_rnds}."],
@@ -502,6 +515,8 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "title": "Skirt hem frill",
         "stitch": "in the round · hdc + shells",
         "counts": {"base": frill_base, "full": frill_full, "rounds": frill_rnds + 2},
+        "progress": {"total": frill_rnds + 2, "start": frill_base, "end": frill_full,
+                     "incRounds": [{"rnd": 2, "count": frill_full}]},
         "steps": [
             ["Set-up", f"In {C['body']}, join to the skirt hem. Hdc evenly around to {frill_base} hdc (multiple of 6). Join."],
             ["Flare", f"Ch 2, *hdc in next 2 sts, 2 hdc in next; rep from * around, join. ({frill_full} hdc)"],
@@ -569,6 +584,94 @@ def compute_pattern(input_: Dict[str, Any] | None = None) -> Dict[str, Any]:
     }
 
 
+def estimate_yarn(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Rough yarn estimate (metres + yards) per piece and per colour.
+
+    Crochet yardage can't be computed exactly without swatching the actual
+    yarn, so this is deliberately a *rough* estimate: it multiplies the total
+    stitches worked in each piece by the physical stitch width and a
+    per-stitch consumption factor, adds a fixed allowance for weaving and
+    joins, and buckets pieces by colour. Treat it as a shopping guide (buy a
+    little over), not a precise figure.
+
+    Takes a :func:`compute_pattern` result and returns::
+
+        {"unit", "wastePct", "pieces": [...], "byColor": {...}, "total": {...}}
+    """
+    meta = result["meta"]
+    dens = meta["density"]
+    colors = meta["colors"]
+    waste = 1.12                       # +12% for weaving ends, joins, seaming
+    yd = 1.0936                        # metres -> yards
+    # yarn consumed per stitch, as a multiple of the stitch's width
+    factor = {"rib": 5.2, "hdc": 3.3, "sc": 2.6}
+    # piece id -> (density key, stitch factor key, colour key)
+    spec = {
+        "waistband": ("rib", "rib", "body"),
+        "skirt": ("hdc", "hdc", "body"),
+        "flounce": ("sc", "sc", "cap"),
+        "sleeves": ("sc", "sc", "cap"),
+        "gillFrill": ("sc", "sc", "body"),
+        "hemFrill": ("hdc", "hdc", "body"),
+        "straps": ("sc", "sc", "cap"),
+    }
+
+    def total_sts(piece: Dict[str, Any]) -> int:
+        pr = piece.get("progress")
+        if not pr:
+            return 0
+        inc = sorted(pr["incRounds"], key=lambda x: x["rnd"])
+        s = 0
+        for r_ in range(1, pr["total"] + 1):
+            c = pr["start"]
+            for it in inc:
+                if it["rnd"] <= r_:
+                    c = it["count"]
+            s += c
+        return s
+
+    by_id = {p["id"]: p for p in result["pieces"]}
+    color_cm = {"cap": 0.0, "body": 0.0, "spot": 0.0}
+    flounce_sleeve_cm = 0.0
+    pieces_out = []
+
+    for pid, (dk, fk, ck) in spec.items():
+        p = by_id.get(pid)
+        if not p:
+            continue
+        make = p.get("makeCount", 1)
+        sts = p["counts"]["sts"] * 3 if pid == "straps" else total_sts(p)
+        width = 1.0 / dens[dk]["st"]
+        cm = sts * width * factor[fk] * make * waste
+        color_cm[ck] += cm
+        if pid in ("flounce", "sleeves"):
+            flounce_sleeve_cm += cm
+        pieces_out.append({
+            "id": pid, "title": p["title"], "color": ck,
+            "meters": round(cm / 100, 1), "yards": round(cm / 100 * yd, 1),
+        })
+
+    # the dots themselves, in the spot colour — roughly 15% of the spotted area
+    spot_cm = flounce_sleeve_cm * 0.15
+    color_cm["spot"] += spot_cm
+    pieces_out.append({
+        "id": "spots", "title": "Polka spots", "color": "spot",
+        "meters": round(spot_cm / 100, 1), "yards": round(spot_cm / 100 * yd, 1),
+    })
+
+    total_cm = sum(color_cm.values())
+    return {
+        "unit": meta["unit"],
+        "wastePct": 12,
+        "pieces": pieces_out,
+        "byColor": {
+            k: {"name": colors.get(k, k), "meters": round(v / 100, 1), "yards": round(v / 100 * yd, 1)}
+            for k, v in color_cm.items()
+        },
+        "total": {"meters": round(total_cm / 100, 1), "yards": round(total_cm / 100 * yd, 1)},
+    }
+
+
 # Backwards-compatible aliases mirroring the JS export names, so the test
 # contract can import the same identifiers.
 computePattern = compute_pattern
@@ -576,5 +679,6 @@ incPlan = inc_plan
 evenAdjust = even_adjust
 spotChart = spot_chart
 spotCharts = spot_charts
+estimateYarn = estimate_yarn
 toCm = to_cm
 fromCm = from_cm

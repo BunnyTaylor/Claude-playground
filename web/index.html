@@ -34,6 +34,11 @@
           <button class="btn ghost sm" id="dupBtn">⧉ Duplicate</button>
         </div>
         <div class="proj-list" id="projList"></div>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn ghost sm" id="exportBtn">⭳ Export all</button>
+          <button class="btn ghost sm" id="importBtn">⭱ Import</button>
+          <input type="file" id="importFile" accept="application/json" hidden>
+        </div>
       </div>
 
       <div class="panel">
@@ -138,6 +143,7 @@
       </div>
       <div class="viz" id="viz"></div>
       <div id="warnings"></div>
+      <div id="yarn"></div>
       <div class="cards" id="cards"></div>
       <p class="foot">
         Starting counts from your gauge — crochet relaxes and stretches, so try pieces on as you go,

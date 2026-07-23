@@ -25,7 +25,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from crochet_core import compute_pattern
+from crochet_core import compute_pattern, estimate_yarn
 from crochet_viz import render_dress_svg
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -84,6 +84,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(500, {"error": f"internal error: {exc}"})
 
         result["svg"] = svg
+        try:
+            result["yarn"] = estimate_yarn(result)
+        except Exception:  # noqa: BLE001 - yarn estimate is best-effort
+            result["yarn"] = None
         self._json(200, result)
 
     def log_message(self, fmt, *args) -> None:  # quieter console

@@ -29,9 +29,18 @@ python3 serve.py --open          # opens http://127.0.0.1:8000
 
 Set your gauge, measurements, colours and spot sizes and the page shows a
 **live SVG preview of the dress** alongside the full round-by-round pattern.
-**Projects are saved in your browser** (localStorage) — name one, hit Save,
-and it survives refreshes; load, duplicate or delete saved projects from the
-sidebar. Nothing leaves your device, and there's no account or server storage.
+It also gives you:
+
+- **A per-piece row counter** — big tappable −/＋ buttons that track which round
+  you're on, show the running stitch count, and light up on increase rounds.
+  Progress is saved per project, so you can put the phone down mid-round and
+  come back. Ideal for actually making the thing with a phone propped nearby.
+- **A yarn estimate** — rough metres/yards per colour (with an allowance for
+  ends and joins) so you know roughly how much to buy.
+- **Projects saved in your browser** (localStorage) — name one, hit Save, and
+  it survives refreshes; load, duplicate, delete, or **export/import** all
+  projects as a JSON file to move them between devices. Nothing leaves your
+  device, and there's no account or server storage.
 
 ### Command line
 
@@ -104,6 +113,28 @@ fitted waist, A-line skirt, scallop frills and hem mushrooms — scaled from the
 real circumferences, with spots scattered in whatever sizes the design uses
 (seeded, so the same input always draws the same picture). The web UI shows it
 live; the CLI writes it with `--svg`; call it directly for your own renderer.
+
+## Yarn estimate
+
+`crochet_core.estimate_yarn(result)` returns a rough yardage estimate — metres
+and yards per piece and per colour, plus a grand total with a fixed allowance
+for weaving and joins. It multiplies the stitches worked in each piece by the
+physical stitch width and a per-stitch consumption factor. Crochet yardage
+can't be exact without swatching the real yarn, so treat it as a shopping
+guide (buy a little over), not a precise figure. The web UI shows it as a
+panel; the CLI prints it with `--yarn`.
+
+## Row-counter data
+
+Each round-based piece carries a `progress` block:
+
+```python
+piece["progress"]   # {"total", "start", "end", "incRounds": [{"rnd", "count"}, ...]}
+```
+
+`incRounds` lists exactly which rounds change the stitch count and to what, so a
+counter can show the running count at any round and flag increase rounds without
+parsing prose. The web UI's row counter is built on this.
 
 ## The API
 

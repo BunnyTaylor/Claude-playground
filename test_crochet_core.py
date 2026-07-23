@@ -14,7 +14,7 @@ import math
 
 from crochet_core import (
     compute_pattern, default_input, DEFAULT_INPUT, inc_plan, even_adjust,
-    spot_chart, spot_charts, density, even, mult, to_cm, from_cm,
+    spot_chart, spot_charts, estimate_yarn, density, even, mult, to_cm, from_cm,
 )
 
 # The JS suite reaches into DEFAULT_INPUT via structuredClone; we deep-copy.
@@ -266,6 +266,51 @@ def test_inches_and_centimetres_describe_the_same_garment():
     a = cm["pieces"][0]["counts"]["sts"]
     b = res["pieces"][0]["counts"]["sts"]
     assert abs(a - b) <= 2, f"cm {a} vs in {b}"
+
+
+# ---------------- progress (row counter data) ----------------
+
+def test_progress_end_matches_counts_and_stays_in_bounds():
+    pieces = compute_pattern(DEFAULT_INPUT)["pieces"]
+    have = {p["id"]: p for p in pieces if "progress" in p}
+    # the round-based pieces all carry a progress timeline
+    for pid in ("waistband", "skirt", "flounce", "sleeves", "gillFrill", "hemFrill"):
+        assert pid in have, pid
+    for p in have.values():
+        pr = p["progress"]
+        assert pr["total"] >= 1
+        for it in pr["incRounds"]:
+            assert 1 <= it["rnd"] <= pr["total"], p["id"]
+        # walking the timeline to the last round yields the stated end count
+        c = pr["start"]
+        for it in sorted(pr["incRounds"], key=lambda x: x["rnd"]):
+            c = it["count"]
+        assert c == pr["end"], p["id"]
+
+
+def test_skirt_progress_final_count_equals_engine_end():
+    p = next(x for x in compute_pattern(DEFAULT_INPUT)["pieces"] if x["id"] == "skirt")
+    assert p["progress"]["end"] == p["counts"]["end"]
+
+
+# ---------------- yarn estimate ----------------
+
+def test_yarn_estimate_is_positive_and_consistent():
+    est = estimate_yarn(compute_pattern(DEFAULT_INPUT))
+    assert est["total"]["meters"] > 0
+    # yards ~ metres * 1.0936
+    assert abs(est["total"]["yards"] - est["total"]["meters"] * 1.0936) < est["total"]["meters"]
+    # colour buckets sum (about) to the total
+    by = sum(c["meters"] for c in est["byColor"].values())
+    assert abs(by - est["total"]["meters"]) < 1.0
+
+
+def test_yarn_estimate_grows_with_a_bigger_body():
+    small = estimate_yarn(compute_pattern(DEFAULT_INPUT))
+    big = copy.deepcopy(DEFAULT_INPUT)
+    for k in big["body"]:
+        big["body"][k] *= 1.3
+    assert estimate_yarn(compute_pattern(big))["total"]["meters"] > small["total"]["meters"]
 
 
 # ---------------- visualization ----------------

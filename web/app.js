@@ -6,10 +6,12 @@
 const $ = (id) => document.getElementById(id);
 const LS_PROJECTS = "mushroom.projects.v1";
 const LS_WORKING = "mushroom.working.v1";
+const LS_PROGRESS = "mushroom.progress.v1";
 
 let unit = "cm";
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
+let LAST = null;             // most recent /api/pattern response
 
 /* ---------- field <-> state ---------- */
 
@@ -125,6 +127,7 @@ async function generate() {
 }
 
 function render(data) {
+  LAST = data;
   $("viz").innerHTML = data.svg || "";
 
   const w = $("warnings");
@@ -132,6 +135,8 @@ function render(data) {
     w.innerHTML = `<div class="warn"><b>⚠ Fit warnings</b><ul>` +
       data.warnings.map((x) => `<li>${esc(x)}</li>`).join("") + `</ul></div>`;
   } else { w.innerHTML = ""; }
+
+  renderYarn(data.yarn);
 
   $("cards").innerHTML = data.pieces.map((p) => {
     const wide = ["spots", "sleeves", "border"].includes(p.id);
@@ -143,9 +148,77 @@ function render(data) {
     const make = (p.makeCount || 1) > 1 ? ` ×${p.makeCount}` : "";
     return `<div class="card${wide ? " wide" : ""}">
       <div class="ch"><h3>${esc(p.title)}${make}</h3><div class="st">${esc(p.stitch)}</div></div>
-      <div class="cb"><div class="counts">${esc(counts)}</div>${steps}</div>
+      <div class="cb">${counterHTML(p)}<div class="counts">${esc(counts)}</div>${steps}</div>
     </div>`;
   }).join("");
+  syncCounters();
+}
+
+function renderYarn(yarn) {
+  const el = $("yarn");
+  if (!yarn) { el.innerHTML = ""; return; }
+  const u = yarn.unit;
+  const unitPref = u === "in" ? "yd" : "m";
+  const amount = (c) => unitPref === "yd" ? `${c.yards} yd <small>(${c.meters} m)</small>` : `${c.meters} m <small>(${c.yards} yd)</small>`;
+  const cols = ["cap", "body", "spot"].filter((k) => yarn.byColor[k] && yarn.byColor[k].meters > 0).map((k) => {
+    const c = yarn.byColor[k];
+    return `<div class="cc"><div class="n">${esc(c.name)}</div><div class="v">${amount(c)}</div></div>`;
+  }).join("");
+  el.innerHTML = `<div class="yarn"><h3>Yarn estimate</h3>
+    <p class="sub">Rough guide (includes +${yarn.wastePct}% for ends &amp; joins) — buy a little over.</p>
+    <div class="colors">${cols}</div>
+    <div class="tot">Total ≈ ${amount(yarn.total)}</div></div>`;
+}
+
+/* ---------- row counter ---------- */
+
+function counterHTML(p) {
+  if (!p.progress) return "";
+  return `<div class="counter" data-piece="${p.id}">
+    <button class="cbtn" data-d="-1" aria-label="previous round">−</button>
+    <div class="cmid"><div class="crnd"></div><div class="ccount"></div><div class="cbar"><i></i></div></div>
+    <button class="cbtn" data-d="1" aria-label="next round">＋</button>
+    <button class="cbtn creset" data-reset="1">reset</button>
+  </div>`;
+}
+
+const progressAll = () => { try { return JSON.parse(localStorage.getItem(LS_PROGRESS)) || {}; } catch { return {}; } };
+const curProj = () => activeId || "working";
+
+function getRound(pid) {
+  const all = progressAll();
+  return (all[curProj()] && all[curProj()][pid]) || 0;
+}
+function setRound(pid, r, total) {
+  r = Math.max(0, Math.min(total, r));
+  const all = progressAll();
+  (all[curProj()] = all[curProj()] || {})[pid] = r;
+  localStorage.setItem(LS_PROGRESS, JSON.stringify(all));
+  syncCounters();
+}
+function countAt(prog, r) {
+  let c = prog.start;
+  for (const it of [...prog.incRounds].sort((a, b) => a.rnd - b.rnd)) if (it.rnd <= r) c = it.count;
+  return c;
+}
+function pieceById(pid) { return LAST && LAST.pieces.find((p) => p.id === pid); }
+
+function syncCounters() {
+  document.querySelectorAll(".counter").forEach((el) => {
+    const p = pieceById(el.dataset.piece);
+    if (!p || !p.progress) return;
+    const prog = p.progress, r = getRound(p.id);
+    const isInc = prog.incRounds.some((it) => it.rnd === r);
+    const done = r >= prog.total;
+    el.classList.toggle("inc", isInc && r > 0);
+    el.querySelector(".crnd").innerHTML = done
+      ? `✓ done · ${prog.total} rnds`
+      : `Rnd ${r} / ${prog.total}${isInc && r > 0 ? ` · <span class="cinc">increase</span>` : ""}`;
+    el.querySelector(".ccount").textContent = `${countAt(prog, r)} sts`;
+    el.querySelector(".cbar > i").style.width = `${Math.round(r / prog.total * 100)}%`;
+    el.querySelector('[data-d="-1"]').disabled = r <= 0;
+    el.querySelector('[data-d="1"]').disabled = done;
+  });
 }
 
 function fmtCount(v) {
@@ -258,8 +331,59 @@ function wire() {
     else if (del) deleteProject(del);
   });
 
+  // row-counter buttons (event delegation on the persistent container)
+  $("cards").addEventListener("click", (e) => {
+    const btn = e.target.closest(".cbtn");
+    if (!btn) return;
+    const wrap = btn.closest(".counter");
+    const p = pieceById(wrap.dataset.piece);
+    if (!p || !p.progress) return;
+    if (btn.dataset.reset !== undefined) setRound(p.id, 0, p.progress.total);
+    else setRound(p.id, getRound(p.id) + parseInt(btn.dataset.d, 10), p.progress.total);
+  });
+
   $("printBtn").addEventListener("click", () => window.print());
   $("svgBtn").addEventListener("click", downloadSVG);
+  $("exportBtn").addEventListener("click", exportAll);
+  $("importBtn").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", importFile);
+}
+
+function exportAll() {
+  const bundle = {
+    kind: "mushroom-dress-projects", version: 1, exportedAt: new Date().toISOString(),
+    projects: loadProjects(), progress: progressAll(),
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "mushroom-dress-projects.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  $("status").textContent = "exported projects";
+}
+
+function importFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const b = JSON.parse(reader.result);
+      const incoming = b.projects || (b.kind ? {} : b); // accept a raw project map too
+      const merged = { ...loadProjects(), ...incoming };
+      saveProjects(merged);
+      if (b.progress) {
+        localStorage.setItem(LS_PROGRESS, JSON.stringify({ ...progressAll(), ...b.progress }));
+      }
+      renderProjects();
+      $("status").textContent = `imported ${Object.keys(incoming).length} project(s)`;
+    } catch (err) {
+      $("status").textContent = "import failed: " + err.message;
+    }
+    $("importFile").value = "";
+  };
+  reader.readAsText(file);
 }
 
 function downloadSVG() {
