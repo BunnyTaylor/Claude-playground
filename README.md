@@ -37,13 +37,18 @@ npm start                      # http://127.0.0.1:8000  (Node)
 python3 -m http.server -d web  # if you prefer Python
 ```
 
-Set your gauge, measurements, colours and spot sizes; the page shows a **live
-preview of the dress** and the full pattern. It also gives you a **per-piece
-row counter** (tappable, tracks increase rounds, saves progress per project), a
-**yarn estimate**, US/UK terminology, sleeveless/strapless silhouettes, and
-**projects saved in your browser** (localStorage) — save, load, duplicate,
-delete, and export/import all projects as a JSON file to move between devices.
-Nothing leaves your device.
+Pick what to **Make** — a **Dress**, a matching **Hat** (mushroom-cap bucket
+hat with a flared brim and gill frill), or a matching **Bag** (drawstring
+bucket bag). All three share your gauge, colours, and spots, so a whole set
+comes out matching. Set your gauge, measurements, colours and spot sizes and
+the page shows a **live preview** and the full pattern. It also gives you a
+**per-piece row counter** (tappable, tracks increase rounds, saves progress per
+project), a **yarn estimate**, **PDF export** (a clean print layout — cover,
+preview, yarn, then every piece), US/UK terminology, skirt-length presets
+(mini/midi/maxi), sleeveless/strapless silhouettes, and **projects saved in
+your browser** (localStorage) — save, load, duplicate, delete, and
+export/import all projects as a JSON file to move between devices. Nothing
+leaves your device.
 
 It's also an **installable PWA**: on a hosted copy (GitHub Pages / your own
 host) your browser offers "Install app" / "Add to Home Screen," and after the
@@ -160,14 +165,17 @@ everywhere, matching how the counts were originally derived — not JavaScript's
 
 ## What's next
 
-Done: engine, CLI, static web app, dress visualization (with a measurements
-overlay), multi-size spots, in-browser persistence + export/import, per-piece
-row counter, yarn estimate, sleeveless/strapless silhouettes, US/UK terms, and
-three hosting paths (shareable file, GitHub Pages, Docker).
+Done: dress, hat, and bag generators; CLI; static web app; visualizations
+(with a measurements overlay); multi-size spots; in-browser persistence +
+export/import; per-piece row counter; yarn estimate; PDF export; skirt-length
+presets; sleeveless/strapless silhouettes; US/UK terms; installable offline
+PWA; and three hosting paths (shareable file, GitHub Pages, Docker).
 
 Ideas, roughly in value order:
 
-1. **Editable spot layout** — drag spots on the preview, save custom scatters.
-2. **More silhouettes** — tiered skirt, midi/maxi presets, high-neck variant.
-3. **Proper PDF export** (currently the browser's print dialog).
+1. **Accessory viz/CLI parity** — expose hat/bag in the CLI too, add schematic
+   overlays for them.
+2. **Editable spot layout** — drag spots on the preview, save custom scatters.
+3. **More variants** — beret & slouchy beanie hats; cross-body / coin-purse
+   bags; tiered skirt; high-neck dress.
 4. **Photo progress log** per project, alongside the row counter.

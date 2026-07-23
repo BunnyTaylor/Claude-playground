@@ -15,9 +15,15 @@ const Core = require("../web/crochet-core.js");
 const Viz = require("../web/crochet-viz.js");
 
 const {
-  computePattern, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
+  computePattern, computeHat, computeBag, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
   spotChart, spotCharts, estimateYarn, convertTerms, density, even, mult, toCm, fromCm,
 } = Core;
+
+function walkProgressEnd(p) {
+  let c = p.progress.start;
+  for (const it of [...p.progress.incRounds].sort((a, b) => a.rnd - b.rnd)) c = it.count;
+  return c;
+}
 
 /* ---------------- units ---------------- */
 
@@ -302,6 +308,58 @@ test("visualizer renders well-formed SVG for single and multi size", () => {
     const svg = Viz.renderDressSvg(computePattern(inp), inp);
     assert.ok(svg.startsWith("<svg") && svg.endsWith("</svg>"));
     assert.ok(svg.includes("ellipse"));
+  }
+});
+
+/* ---------------- matching accessories: hat & bag ---------------- */
+
+test("hat produces a mushroom-cap set tagged kind:hat", () => {
+  const r = computeHat(DEFAULT_INPUT);
+  assert.equal(r.meta.kind, "hat");
+  assert.deepEqual(r.pieces.map((p) => p.id), ["crown", "sides", "brim", "gillFrill", "spots"]);
+});
+
+test("bag produces a bucket-bag set tagged kind:bag", () => {
+  const r = computeBag(DEFAULT_INPUT);
+  assert.equal(r.meta.kind, "bag");
+  assert.deepEqual(r.pieces.map((p) => p.id), ["base", "sides", "spots", "band", "strap"]);
+});
+
+test("accessory shaping reaches its target exactly and stays in bounds", () => {
+  for (const r of [computeHat(DEFAULT_INPUT), computeBag(DEFAULT_INPUT)]) {
+    for (const p of r.pieces) {
+      if (!p.progress) continue;
+      assert.ok(p.progress.total >= 1, p.id);
+      for (const it of p.progress.incRounds) assert.ok(it.rnd >= 1 && it.rnd <= p.progress.total, p.id);
+      assert.equal(walkProgressEnd(p), p.progress.end, p.id);
+    }
+    // spots divide evenly into the round
+    const s = r.pieces.find((p) => p.id === "spots");
+    assert.equal(s.counts.adjustedSts % s.counts.repeatW, 0);
+  }
+});
+
+test("accessories react to their own dimensions", () => {
+  const bigHead = structuredClone(DEFAULT_INPUT);
+  bigHead.accessory = { headCirc: 62 };
+  assert.notEqual(
+    computeHat(DEFAULT_INPUT).pieces.find((p) => p.id === "crown").counts.end,
+    computeHat(bigHead).pieces.find((p) => p.id === "crown").counts.end
+  );
+  const bigBag = structuredClone(DEFAULT_INPUT);
+  bigBag.accessory = { diameter: 26 };
+  assert.notEqual(
+    computeBag(DEFAULT_INPUT).pieces.find((p) => p.id === "base").counts.end,
+    computeBag(bigBag).pieces.find((p) => p.id === "base").counts.end
+  );
+});
+
+test("yarn estimate works for hat and bag (positive, buckets sum to total)", () => {
+  for (const r of [computeHat(DEFAULT_INPUT), computeBag(DEFAULT_INPUT)]) {
+    const est = estimateYarn(r);
+    assert.ok(est.total.meters > 0, r.meta.kind);
+    const by = est.byColor.cap.meters + est.byColor.body.meters + est.byColor.spot.meters;
+    assert.ok(Math.abs(by - est.total.meters) < 1.0, r.meta.kind);
   }
 });
 

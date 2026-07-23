@@ -10,6 +10,7 @@ const LS_PROGRESS = "mushroom.progress.v1";
 
 let unit = "cm";
 let terms = "US";
+let projType = "dress";       // dress | hat | bag
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
 let LAST = null;             // most recent /api/pattern response
@@ -19,8 +20,9 @@ let LAST = null;             // most recent /api/pattern response
 const GAUGES = ["rib", "hdc", "sc"];
 const GFIELDS = { Sts: "sts", Rows: "rows", W: "width", H: "height" };
 const BODY = ["bust", "waist", "upperBust", "hip", "upperArm", "wrist", "skirtLen", "sleeveLen"];
+const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen" };
 // measurement fields that must be numerically converted when the unit changes
-const CONVERT = [...BODY, "ribW", "ribH", "hdcW", "hdcH", "scW", "scH"];
+const CONVERT = [...BODY, "ribW", "ribH", "hdcW", "hdcH", "scW", "scH", ...Object.keys(ACC)];
 
 function gather() {
   const num = (id) => parseFloat($(id).value);
@@ -54,9 +56,11 @@ function gather() {
     body: ($("bodyName").value || "").trim() || "body colour",
   };
   const palette = { cap: $("capCol").value, spot: $("spotCol").value, body: $("bodyCol").value };
+  const accessory = {};
+  for (const [id, key] of Object.entries(ACC)) accessory[key] = num(id);
 
   return {
-    input: { unit, terms, gauges, body, style, colors },
+    input: { unit, terms, gauges, body, style, colors, accessory },
     palette,
     ui: {
       name: $("pName").value,
@@ -78,6 +82,10 @@ function apply(state) {
   for (const btn of $("termsSeg").children) btn.classList.toggle("on", btn.dataset.terms === terms);
   $("sleeveless").checked = !!(input.style && input.style.sleeveless);
   $("strapless").checked = !!(input.style && input.style.strapless);
+  if (input.accessory) {
+    for (const [id, key] of Object.entries(ACC)) if (input.accessory[key] != null) $(id).value = input.accessory[key];
+  }
+  setProjType(state.projType || "dress");
 
   for (const g of GAUGES) {
     $(g + "Sts").value = input.gauges[g].sts;
@@ -119,17 +127,30 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 // so the app is a static site — no server, works offline and on GitHub Pages.
 function generate() {
   const { input, palette, ui } = gather();
-  localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui }));
+  localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui, projType }));
   try {
-    let result = CrochetCore.computePattern(input);
+    let result = projType === "hat" ? CrochetCore.computeHat(input)
+      : projType === "bag" ? CrochetCore.computeBag(input)
+      : CrochetCore.computePattern(input);
     result = CrochetCore.convertTerms(result, input.terms || "US");
-    result.svg = CrochetViz.renderDressSvg(result, input, palette, { schematic: $("schematic").checked });
+    result.svg = CrochetViz.render(result, input, palette, { schematic: $("schematic").checked });
     result.yarn = CrochetCore.estimateYarn(result);
     render(result);
     $("status").textContent = "updated";
   } catch (err) {
     $("status").textContent = "error: " + err.message;
   }
+}
+
+function setProjType(type) {
+  projType = type;
+  for (const b of $("typeSeg").children) b.classList.toggle("on", b.dataset.type === type);
+  $("dressInputs").hidden = type !== "dress";
+  $("hatInputs").hidden = type !== "hat";
+  $("bagInputs").hidden = type !== "bag";
+  // the "Measurements" schematic toggle only applies to the dress preview
+  $("schematic").closest("label").style.display = type === "dress" ? "" : "none";
+  document.querySelector(".toolbar h2").textContent = { dress: "Your dress", hat: "Your hat", bag: "Your bag" }[type];
 }
 
 function render(data) {
@@ -255,6 +276,7 @@ function renderProjects() {
 
 function saveCurrent() {
   const state = gather();
+  state.projType = projType;
   if (!state.ui.name.trim()) state.ui.name = "Untitled";
   const projects = loadProjects();
   const id = activeId || ("p" + Date.now().toString(36));
@@ -325,6 +347,22 @@ function wire() {
     });
   }
 
+  for (const btn of $("typeSeg").children) {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.type === projType) return;
+      setProjType(btn.dataset.type);
+      generate();
+    });
+  }
+
+  for (const btn of $("lenPresets").children) {
+    btn.addEventListener("click", () => {
+      const cm = parseFloat(btn.dataset.len);
+      $("skirtLen").value = unit === "in" ? Math.round(cm / 2.54 * 10) / 10 : cm;
+      generate();
+    });
+  }
+
   $("saveBtn").addEventListener("click", saveCurrent);
   $("newBtn").addEventListener("click", () => {
     activeId = null;
@@ -373,7 +411,14 @@ function wire() {
   });
   addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
 
-  $("printBtn").addEventListener("click", () => window.print());
+  $("printBtn").addEventListener("click", () => {
+    // The page <title> becomes the suggested PDF filename in "Save as PDF".
+    const prev = document.title;
+    const name = ($("pName").value.trim() || "Mushroom pattern") + " — crochet pattern";
+    document.title = name;
+    window.print();
+    setTimeout(() => { document.title = prev; }, 800);
+  });
   $("svgBtn").addEventListener("click", downloadSVG);
   $("exportBtn").addEventListener("click", exportAll);
   $("importBtn").addEventListener("click", () => $("importFile").click());
@@ -458,8 +503,10 @@ function DEFAULT_STATE() {
       },
       body: { bust: 92, waist: 74, upperBust: 84, hip: 98, upperArm: 30, wrist: 16, skirtLen: 45, sleeveLen: 50 },
       style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, dotSizes: [1.5, 2.5, 3.5] },
+      accessory: { headCirc: 56, sideHeight: 8, brimWidth: 5, diameter: 18, height: 22, strapLen: 70 },
       colors: { cap: "cap colour", spot: "spot colour", body: "body colour" },
     },
+    projType: "dress",
     ui: { name: "", capCol: "#B83A2B", spotCol: "#FCF8EF", bodyCol: "#F2E4C9" },
   };
 }

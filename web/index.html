@@ -53,7 +53,14 @@
         <h2>Your numbers</h2>
         <p class="sub">Swatch first — every count depends on it.</p>
 
-        <div class="two">
+        <div class="group-label">Make</div>
+        <div class="seg" id="typeSeg">
+          <button data-type="dress" class="on">Dress</button>
+          <button data-type="hat">Hat</button>
+          <button data-type="bag">Bag</button>
+        </div>
+
+        <div class="two" style="margin-top:14px">
           <div>
             <div class="group-label">Units</div>
             <div class="seg" id="unitSeg">
@@ -116,6 +123,28 @@
           <input type="number" id="scW" value="10" step="0.1"><input type="number" id="scH" value="10" step="0.1">
         </div>
 
+        <!-- HAT inputs -->
+        <div id="hatInputs" hidden>
+          <div class="group-label">Hat</div>
+          <div class="two">
+            <div class="field"><label>Head circumference</label><input type="number" id="headCirc" value="56" step="0.5"></div>
+            <div class="field"><label>Cap depth <span class="hint">sides</span></label><input type="number" id="sideHeight" value="8" step="0.5"></div>
+          </div>
+          <div class="field"><label>Brim width <span class="hint">flare</span></label><input type="number" id="brimWidth" value="5" step="0.5"></div>
+        </div>
+
+        <!-- BAG inputs -->
+        <div id="bagInputs" hidden>
+          <div class="group-label">Bag</div>
+          <div class="two">
+            <div class="field"><label>Base diameter</label><input type="number" id="diameter" value="18" step="0.5"></div>
+            <div class="field"><label>Height</label><input type="number" id="bagHeight" value="22" step="0.5"></div>
+          </div>
+          <div class="field"><label>Strap length</label><input type="number" id="strapLen" value="70" step="1"></div>
+        </div>
+
+        <!-- DRESS inputs -->
+        <div id="dressInputs">
         <div class="group-label">Body measurements</div>
         <div class="two">
           <div class="field"><label>Bust</label><input type="number" id="bust" value="92" step="0.5"></div>
@@ -130,7 +159,13 @@
           <div class="field"><label>Wrist</label><input type="number" id="wrist" value="16" step="0.5"></div>
         </div>
         <div class="two">
-          <div class="field"><label>Skirt length</label><input type="number" id="skirtLen" value="45" step="0.5"></div>
+          <div class="field"><label>Skirt length</label><input type="number" id="skirtLen" value="45" step="0.5">
+            <div class="seg" style="margin-top:5px" id="lenPresets">
+              <button type="button" data-len="35">Mini</button>
+              <button type="button" data-len="60">Midi</button>
+              <button type="button" data-len="95">Maxi</button>
+            </div>
+          </div>
           <div class="field"><label>Sleeve length</label><input type="number" id="sleeveLen" value="50" step="0.5"></div>
         </div>
 
@@ -152,6 +187,7 @@
           <label class="chk"><input type="checkbox" id="sleeveless"> Sleeveless</label>
           <label class="chk"><input type="checkbox" id="strapless"> Strapless</label>
         </div>
+        </div><!-- /dressInputs -->
       </div>
     </div>
 
@@ -164,7 +200,7 @@
           <label class="chk" style="padding:0"><input type="checkbox" id="schematic"> Measurements</label>
           <button class="btn sm" id="installBtn" hidden>⬇ Install app</button>
           <button class="btn ghost sm" id="svgBtn">⬇ SVG</button>
-          <button class="btn ghost sm" id="printBtn">🖨 Print</button>
+          <button class="btn ghost sm" id="printBtn">⬇ PDF</button>
         </div>
       </div>
       <div class="viz" id="viz"></div>

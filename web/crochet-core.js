@@ -367,9 +367,187 @@ var CrochetCore = (function () {
     return {
       pieces: pieces, warnings: warnings,
       meta: {
-        unit: u, density: { rib: rib, hdc: hdc, sc: sc },
+        unit: u, kind: "dress", density: { rib: rib, hdc: hdc, sc: sc },
         waistbandCirc: wbCirc, hemCirc: hemCirc, skirtTopSts: skStart, colors: C
       }
+    };
+  }
+
+  // Shared: a spotted-band "spots" piece for the accessories, reusing the
+  // same elliptical chart the dress uses so everything matches.
+  function spotsPieceFor(baseSts, C, S, u, sc, where) {
+    var sizesCm = ((S.dotSizes && S.dotSizes.length) ? S.dotSizes : [S.dotDia]).map(function (s) { return toCm(s, u); });
+    var charts = spotCharts(sizesCm, S.dotGap, sc.st, sc.row);
+    var chart = charts[0];
+    var reps = Math.max(1, Math.floor(baseSts / chart.repW));
+    return {
+      id: "spots", title: "Spots", stitch: "tapestry sc · carry both colours",
+      counts: { spotW: chart.W, spotH: chart.H, repeatW: chart.repW, repeatH: chart.repH, repsAround: reps, adjustedSts: reps * chart.repW },
+      chart: chart, charts: charts,
+      steps: [
+        ["Where", "Work the spots on " + where + ", in " + C.cap + " carrying " + C.spot + "."],
+        ["Count", "Adjust that round to " + (reps * chart.repW) + " sts so " + reps + " spot repeats fit exactly — otherwise the last spot is cut in half at the join."],
+      ].concat(chart.rows.map(function (row, i) {
+        return ["Rnd " + (i + 1), "*sc " + row.lead + " in " + C.cap + ", sc " + row.w + " in " + C.spot + ", sc " + row.trail + " in " + C.cap + "; rep from * " + reps + " times."];
+      })).concat([["Stagger", "Shift each band by " + jsround(chart.repW / 2) + " sts so spots brick rather than stack."]]),
+    };
+  }
+
+  // ---- Matching bucket HAT (mushroom cap): domed spotted crown, grip band,
+  // flared brim, gill frill underneath. Worked top-down. ----
+  function computeHat(input) {
+    input = input || {};
+    var u = input.unit || "cm";
+    var C = Object.assign({}, DEFAULT_INPUT.colors, input.colors || {});
+    var S = Object.assign({}, DEFAULT_INPUT.style, input.style || {});
+    var G = Object.assign({}, DEFAULT_INPUT.gauges, input.gauges || {});
+    var A = input.accessory || {};
+    var rib = density(G.rib, u), hdc = density(G.hdc, u), sc = density(G.sc, u);
+    var headCirc = toCm(A.headCirc != null ? A.headCirc : 56, u);
+    var sideHeight = toCm(A.sideHeight != null ? A.sideHeight : 8, u);
+    var brimWidth = toCm(A.brimWidth != null ? A.brimWidth : 5, u);
+    var warnings = [], pieces = [];
+    var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
+
+    var headSts = even(jsround(headCirc * hdc.st));
+    var radius = headCirc / (2 * Math.PI);
+    var crownRnds = Math.max(6, jsround(radius * hdc.row));
+    var crownPlan = incPlan(8, headSts, crownRnds, "hdc", 1);
+    pieces.push({
+      id: "crown", title: "Mushroom-cap crown", stitch: "in the round, top down · hdc",
+      counts: { start: 8, end: crownPlan.finalCount, rounds: crownRnds },
+      progress: { total: crownRnds, start: 8, end: crownPlan.finalCount, incRounds: mapInc(crownPlan.rounds) },
+      yarn: { g: "hdc", color: "cap" },
+      steps: [
+        ["Foundation", "In " + C.cap + ", make a magic ring; 8 hdc into the ring, join. (8 hdc)"],
+        ["Dome", "Increase on the rounds below to dome the cap to " + crownPlan.finalCount + " sts."],
+      ].concat(crownPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
+        .concat([["Finish", "Work plain to Rnd " + crownRnds + ". (" + crownPlan.finalCount + " hdc)"]]),
+    });
+
+    var sideRnds = Math.max(3, jsround(sideHeight * hdc.row));
+    pieces.push({
+      id: "sides", title: "Cap sides", stitch: "in the round · hdc",
+      counts: { sts: headSts, rounds: sideRnds },
+      progress: { total: sideRnds, start: headSts, end: headSts, incRounds: [] },
+      yarn: { g: "hdc", color: "cap" },
+      steps: [
+        ["Body", "In " + C.cap + ", ch 2, hdc in each st around, join. Rep to Rnd " + sideRnds + ". (" + headSts + " hdc)"],
+        ["Try on", "Slip it on before the brim — the sides should sit snugly on your head."],
+      ],
+    });
+
+    var brimSts = even(jsround((headCirc + 2 * Math.PI * brimWidth) * hdc.st));
+    var brimRnds = Math.max(3, jsround(brimWidth * hdc.row));
+    var brimPlan = incPlan(headSts, brimSts, brimRnds + 2, "hdc", 1);
+    pieces.push({
+      id: "brim", title: "Flared brim", stitch: "in the round · hdc",
+      counts: { start: headSts, end: brimPlan.finalCount, rounds: brimRnds },
+      progress: { total: brimRnds + 1, start: headSts, end: brimPlan.finalCount, incRounds: mapInc(brimPlan.rounds) },
+      yarn: { g: "hdc", color: "cap" },
+      steps: [
+        ["Flare", "The brim flares out like the edge of a mushroom cap."],
+      ].concat(brimPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
+        .concat([["Finish", "Fasten off. (" + brimPlan.finalCount + " hdc)"]]),
+    });
+
+    var gillBase = mult(brimPlan.finalCount, 6);
+    var gillRnds = Math.max(2, jsround(3 * sc.row));
+    pieces.push({
+      id: "gillFrill", title: "Gill frill (cap underside)", stitch: "shell edging · sc + dc",
+      counts: { base: gillBase, shells: Math.floor(gillBase / 6) },
+      progress: { total: gillRnds + 1, start: gillBase, end: gillBase, incRounds: [] },
+      yarn: { g: "sc", color: "body" },
+      steps: [
+        ["Set-up", "In " + C.body + ", join under the brim edge. Sc evenly to " + gillBase + " sc (multiple of 6). Join."],
+        ["Shells", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + Math.floor(gillBase / 6) + " shells)"],
+        ["Finish", "Fasten off; block so the gills open like a real cap."],
+      ],
+    });
+
+    pieces.push(spotsPieceFor(headSts, C, S, u, sc, "the cap sides and lower crown"));
+
+    if (headSts < 40) warnings.push("Head circumference looks small — double-check the measurement and your hdc gauge.");
+    return {
+      pieces: pieces, warnings: warnings,
+      meta: { unit: u, kind: "hat", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, headCirc: headCirc, brimCirc: headCirc + 2 * Math.PI * brimWidth },
+    };
+  }
+
+  // ---- Matching drawstring bucket BAG: round base, straight spotted sides,
+  // eyelet round + drawstring, strap. Worked bottom-up. ----
+  function computeBag(input) {
+    input = input || {};
+    var u = input.unit || "cm";
+    var C = Object.assign({}, DEFAULT_INPUT.colors, input.colors || {});
+    var S = Object.assign({}, DEFAULT_INPUT.style, input.style || {});
+    var G = Object.assign({}, DEFAULT_INPUT.gauges, input.gauges || {});
+    var A = input.accessory || {};
+    var rib = density(G.rib, u), hdc = density(G.hdc, u), sc = density(G.sc, u);
+    var diameter = toCm(A.diameter != null ? A.diameter : 18, u);
+    var height = toCm(A.height != null ? A.height : 22, u);
+    var strapLen = toCm(A.strapLen != null ? A.strapLen : 70, u);
+    var warnings = [], pieces = [];
+    var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
+
+    var baseSts = even(jsround(Math.PI * diameter * hdc.st));
+    var baseRnds = Math.max(5, jsround((diameter / 2) * hdc.row));
+    var basePlan = incPlan(8, baseSts, baseRnds, "hdc", 1);
+    pieces.push({
+      id: "base", title: "Round base", stitch: "in the round, from a ring · hdc",
+      counts: { start: 8, end: basePlan.finalCount, rounds: baseRnds },
+      progress: { total: baseRnds, start: 8, end: basePlan.finalCount, incRounds: mapInc(basePlan.rounds) },
+      yarn: { g: "hdc", color: "body" },
+      steps: [
+        ["Foundation", "In " + C.body + ", magic ring; 8 hdc into the ring, join. (8 hdc)"],
+        ["Flat circle", "Increase on the rounds below, keeping the base flat, to " + basePlan.finalCount + " sts."],
+      ].concat(basePlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
+        .concat([["Turn up", "On the next round, work into the back loops only once to pop the sides up."]]),
+    });
+
+    var sideRnds = Math.max(6, jsround(height * hdc.row));
+    pieces.push({
+      id: "sides", title: "Bag sides", stitch: "in the round · hdc",
+      counts: { sts: baseSts, rounds: sideRnds },
+      progress: { total: sideRnds, start: baseSts, end: baseSts, incRounds: [] },
+      yarn: { g: "hdc", color: "cap" },
+      steps: [
+        ["Body", "In " + C.cap + ", ch 2, hdc in each st around, join. Rep to Rnd " + sideRnds + ". (" + baseSts + " hdc)"],
+        ["Spots", "Work the spots (below) over these rounds while you go, or add them after."],
+      ],
+    });
+
+    pieces.push(spotsPieceFor(baseSts, C, S, u, sc, "the bag sides"));
+
+    var eyelets = Math.floor(baseSts / 4);
+    pieces.push({
+      id: "band", title: "Eyelet band + top", stitch: "in the round · dc + sc",
+      counts: { sts: baseSts, eyelets: eyelets, rounds: 3 },
+      progress: { total: 3, start: baseSts, end: baseSts, incRounds: [] },
+      yarn: { g: "hdc", color: "cap" },
+      steps: [
+        ["Eyelets", "Ch 3, *dc in next st, ch 1, sk 1 st; rep from * around, join. (" + eyelets + " eyelet holes for the drawstring)"],
+        ["Top", "Ch 1, sc in each dc and each ch-1 space around, join. (" + baseSts + " sc)"],
+        ["Edge", "Ch 1, sc around once more, join. Fasten off."],
+      ],
+    });
+
+    var strapSts = jsround(strapLen * sc.st);
+    pieces.push({
+      id: "strap", title: "Strap + drawstring", stitch: "flat cords · sc / chain",
+      counts: { strap: strapSts + 1, drawstring: jsround(Math.PI * diameter * 1.6 * sc.st) },
+      yarn: { g: "sc", color: "cap", sts: (strapSts + 1) * 3 },
+      steps: [
+        ["Strap", "In " + C.cap + ", ch " + (strapSts + 2) + "; sc in 2nd ch and each ch across, then 2 more rows. Sew the ends inside the top edge."],
+        ["Drawstring", "Ch a cord about " + Math.round(Math.PI * diameter * 1.6) + " sts long (long enough to weave through the eyelets and tie). Weave it through the eyelet round."],
+        ["Finish", "Knot the drawstring ends; add a tassel if you like. Block the base flat."],
+      ],
+    });
+
+    if (baseSts < 24) warnings.push("Base diameter looks small — check the diameter and your hdc gauge.");
+    return {
+      pieces: pieces, warnings: warnings,
+      meta: { unit: u, kind: "bag", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, baseCirc: Math.PI * diameter, height: height },
     };
   }
 
@@ -394,24 +572,28 @@ var CrochetCore = (function () {
       }
       return s;
     }
-    var byId = {};
-    result.pieces.forEach(function (p) { byId[p.id] = p; });
     var colorCm = { cap: 0, body: 0, spot: 0 };
-    var flounceSleeveCm = 0;
+    var spottedCm = 0;    // yarn in cap-coloured (spotted) areas
     var piecesOut = [];
-    Object.keys(spec).forEach(function (pid) {
-      var p = byId[pid];
-      if (!p) return;
-      var dk = spec[pid][0], fk = spec[pid][1], ck = spec[pid][2];
-      var make = p.makeCount || 1;
-      var sts = pid === "straps" ? p.counts.sts * 3 : totalSts(p);
-      var width = 1.0 / dens[dk].st;
-      var cm = sts * width * factor[fk] * make * waste;
+    result.pieces.forEach(function (p) {
+      // Prefer per-piece yarn metadata (hat/bag); fall back to the dress spec.
+      var g, ck, sts;
+      if (p.yarn) {
+        g = p.yarn.g; ck = p.yarn.color;
+        sts = p.progress ? totalSts(p) : (p.yarn.sts || 0);
+      } else if (spec[p.id]) {
+        g = spec[p.id][0]; ck = spec[p.id][2];
+        sts = p.id === "straps" ? p.counts.sts * 3 : totalSts(p);
+      } else {
+        return; // non-yarn piece (spots, border, drawstring notes)
+      }
+      var cm = sts * (1.0 / dens[g].st) * factor[g] * (p.makeCount || 1) * waste;
+      if (!(cm > 0)) return;
       colorCm[ck] += cm;
-      if (pid === "flounce" || pid === "sleeves") flounceSleeveCm += cm;
-      piecesOut.push({ id: pid, title: p.title, color: ck, meters: Math.round(cm / 100 * 10) / 10, yards: Math.round(cm / 100 * yd * 10) / 10 });
+      if (ck === "cap") spottedCm += cm;
+      piecesOut.push({ id: p.id, title: p.title, color: ck, meters: Math.round(cm / 100 * 10) / 10, yards: Math.round(cm / 100 * yd * 10) / 10 });
     });
-    var spotCm = flounceSleeveCm * 0.15;
+    var spotCm = spottedCm * 0.15;
     colorCm.spot += spotCm;
     piecesOut.push({ id: "spots", title: "Polka spots", color: "spot", meters: Math.round(spotCm / 100 * 10) / 10, yards: Math.round(spotCm / 100 * yd * 10) / 10 });
     var totalCm = colorCm.cap + colorCm.body + colorCm.spot;
@@ -443,7 +625,8 @@ var CrochetCore = (function () {
     CM_PER_IN: CM_PER_IN, toCm: toCm, fromCm: fromCm, jsround: jsround, r1: r1,
     even: even, mult: mult, density: density, incPlan: incPlan, evenAdjust: evenAdjust,
     spotChart: spotChart, spotCharts: spotCharts, DEFAULT_INPUT: DEFAULT_INPUT, defaultInput: defaultInput,
-    computePattern: computePattern, estimateYarn: estimateYarn, convertTerms: convertTerms
+    computePattern: computePattern, computeHat: computeHat, computeBag: computeBag,
+    estimateYarn: estimateYarn, convertTerms: convertTerms
   };
 })();
 

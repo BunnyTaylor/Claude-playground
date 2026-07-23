@@ -241,7 +241,107 @@ var CrochetViz = (function (Core) {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Front-view preview of the mushroom dress">' + parts.join("") + "</svg>";
   }
 
-  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg };
+  // spotsFromResult — pull the design's spot diameters (cm) off the result
+  function spotDiasCm(result, inp, Core, u) {
+    var spots = result.pieces.filter(function (p) { return p.id === "spots"; })[0];
+    if (spots && spots.charts) return spots.charts.map(function (c) { return c.diaCm; });
+    var s = (inp.style || {});
+    return [Core.toCm(s.dotDia != null ? s.dotDia : 2.5, u)];
+  }
+
+  function scatter(parts, region, radii, seed, pal) {
+    var rand = mulberry32(seed >>> 0);
+    var placed = [];
+    var area = Math.max(1, (region.x1 - region.x0) * (region.y1 - region.y0));
+    var count = Math.floor(area / 2200) + 3;
+    var attempts = 0, made = 0;
+    while (made < count && attempts < count * 40) {
+      attempts++;
+      var r = radii[Math.floor(rand() * radii.length)] * (0.85 + rand() * 0.3);
+      var x = region.x0 + r + rand() * (region.x1 - region.x0 - 2 * r);
+      var y = region.y0 + r + rand() * (region.y1 - region.y0 - 2 * r);
+      if (region.ellipse) {
+        var nx = (x - region.cx) / (region.rx - r), ny = (y - region.cy) / (region.ry - r);
+        if (nx * nx + ny * ny > 1) continue;
+      }
+      if (placed.some(function (p) { return (x - p[0]) * (x - p[0]) + (y - p[1]) * (y - p[1]) < (r + p[2] + 4) * (r + p[2] + 4); })) continue;
+      placed.push([x, y, r]); made++;
+      parts.push('<ellipse cx="' + e(x) + '" cy="' + e(y) + '" rx="' + e(r) + '" ry="' + e(r * 0.92) + '" fill="' + pal.spot + '" opacity="0.96"/>');
+    }
+  }
+
+  // ---- Mushroom-cap hat ----
+  function renderHatSvg(result, inp, palette, opts) {
+    opts = opts || {};
+    var width = opts.width || 460, height = opts.height || 380;
+    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var meta = result.meta, u = meta.unit;
+    var headDia = meta.headCirc / Math.PI, brimDia = meta.brimCirc / Math.PI;
+    var cx = width / 2;
+    var scale = Math.min((width * 0.82) / brimDia, 11);
+    var headHalf = (headDia / 2) * scale, brimHalf = (brimDia / 2) * scale;
+    var yBase = height * 0.60, domeH = headHalf * 1.25;
+    var parts = [];
+    parts.push('<rect width="' + width + '" height="' + height + '" fill="' + pal.bg + '"/>');
+    // gill frill fanning under the brim
+    for (var gi = 0; gi <= 22; gi++) {
+      var t = gi / 22, gx = lerp(cx - brimHalf, cx + brimHalf, t);
+      parts.push('<line x1="' + e(cx + (gx - cx) * 0.35) + '" y1="' + e(yBase + 4) + '" x2="' + e(gx) + '" y2="' + e(yBase + 20 + Math.sin(t * Math.PI) * 10) + '" stroke="' + pal.body + '" stroke-width="3" stroke-linecap="round" opacity="0.85"/>');
+    }
+    // brim disc
+    parts.push('<ellipse cx="' + cx + '" cy="' + e(yBase) + '" rx="' + e(brimHalf) + '" ry="' + e(brimHalf * 0.26) + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    // dome
+    parts.push('<path d="M ' + e(cx - headHalf) + ' ' + e(yBase) + ' A ' + e(headHalf) + ' ' + e(domeH) + ' 0 0 1 ' + e(cx + headHalf) + ' ' + e(yBase) + ' Z" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    // spots on the dome
+    var radii = spotDiasCm(result, inp, Core, u).map(function (d) { return Math.max(4, (d / 2) * scale * 1.6); });
+    scatter(parts, { x0: cx - headHalf + 6, x1: cx + headHalf - 6, y0: yBase - domeH + 8, y1: yBase - 6, ellipse: true, cx: cx, cy: yBase, rx: headHalf, ry: domeH }, radii, Math.round(headDia * 31), pal);
+    parts.push('<text x="' + cx + '" y="' + (height - 18) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + pal.capDeep + '">bucket hat · head ' + esc(fmt(meta.headCirc, u)) + '</text>');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket hat">' + parts.join("") + "</svg>";
+  }
+
+  // ---- Drawstring bucket bag ----
+  function renderBagSvg(result, inp, palette, opts) {
+    opts = opts || {};
+    var width = opts.width || 400, height = opts.height || 420;
+    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var meta = result.meta, u = meta.unit;
+    var dia = meta.baseCirc / Math.PI, ht = meta.height;
+    var cx = width / 2;
+    var scale = Math.min((width * 0.62) / dia, (height * 0.5) / Math.max(ht, 1), 9);
+    var half = (dia / 2) * scale, bodyH = ht * scale;
+    var yTop = height * 0.26, yBot = yTop + bodyH, ry = half * 0.30;
+    var parts = [];
+    parts.push('<rect width="' + width + '" height="' + height + '" fill="' + pal.bg + '"/>');
+    // strap
+    parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop + 6) + ' C ' + e(cx - half - 60) + ' ' + e(yTop - 120) + ', ' + e(cx + half + 60) + ' ' + e(yTop - 120) + ', ' + e(cx + half) + ' ' + e(yTop + 6) + '" fill="none" stroke="' + pal.cap + '" stroke-width="8" stroke-linecap="round"/>');
+    // body
+    parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop) + ' L ' + e(cx - half) + ' ' + e(yBot) + ' A ' + e(half) + ' ' + e(ry) + ' 0 0 0 ' + e(cx + half) + ' ' + e(yBot) + ' L ' + e(cx + half) + ' ' + e(yTop) + ' Z" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    // base ellipse (front lip)
+    parts.push('<path d="M ' + e(cx - half) + ' ' + e(yBot) + ' A ' + e(half) + ' ' + e(ry) + ' 0 0 0 ' + e(cx + half) + ' ' + e(yBot) + '" fill="none" stroke="' + pal.capDeep + '" stroke-width="2" opacity="0.5"/>');
+    // spots on the body
+    var radii = spotDiasCm(result, inp, Core, u).map(function (d) { return Math.max(4, (d / 2) * scale * 1.6); });
+    scatter(parts, { x0: cx - half + 6, x1: cx + half - 6, y0: yTop + 14, y1: yBot - 10 }, radii, Math.round(dia * 53), pal);
+    // eyelet band + gathered top with drawstring
+    parts.push('<rect x="' + e(cx - half) + '" y="' + e(yTop - 6) + '" width="' + e(2 * half) + '" height="12" fill="' + pal.capDeep + '" opacity="0.85"/>');
+    for (var ei = 0; ei < 7; ei++) {
+      var ex = lerp(cx - half + 8, cx + half - 8, ei / 6);
+      parts.push('<circle cx="' + e(ex) + '" cy="' + e(yTop) + '" r="2.4" fill="' + pal.bg + '"/>');
+    }
+    parts.push('<ellipse cx="' + cx + '" cy="' + e(yTop) + '" rx="' + e(half) + '" ry="' + e(ry) + '" fill="none" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop) + ' q ' + e(half) + ' -18 ' + e(2 * half) + ' 0" fill="none" stroke="' + pal.body + '" stroke-width="4" stroke-linecap="round"/>');
+    parts.push('<text x="' + cx + '" y="' + (height - 16) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + pal.capDeep + '">bucket bag · ⌀ ' + esc(fmt(dia, u)) + ' × ' + esc(fmt(ht, u)) + '</text>');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket bag">' + parts.join("") + "</svg>";
+  }
+
+  // dispatcher by garment kind
+  function render(result, inp, palette, opts) {
+    var kind = result.meta && result.meta.kind;
+    if (kind === "hat") return renderHatSvg(result, inp, palette, opts);
+    if (kind === "bag") return renderBagSvg(result, inp, palette, opts);
+    return renderDressSvg(result, inp, palette, opts);
+  }
+
+  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg, renderHatSvg: renderHatSvg, renderBagSvg: renderBagSvg, render: render };
 })(typeof CrochetCore !== "undefined" ? CrochetCore : require("./crochet-core.js"));
 
 if (typeof module !== "undefined" && module.exports) module.exports = CrochetViz;
