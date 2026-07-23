@@ -1,26 +1,22 @@
-# Auto-deploy the static app to GitHub Pages on every push to the default
-# branch. The app is pure static files (engine runs in the browser), so this
-# just uploads web/ and publishes it — no build.
+# Tests run on every push and pull request; the live GitHub Pages site is only
+# ever deployed from main/master (or a manual run) — never from a pull request.
 #
 # One-time setup: repo Settings → Pages → Source → "GitHub Actions".
-# (This workflow also enables Pages automatically on its first successful run.)
-# The site then lives at https://<user>.github.io/<repo>/
+# The site then lives at https://<user>.github.io/<repo>/ and redeploys on
+# every push to main.
 
-name: Deploy to GitHub Pages
+name: Test & Deploy to GitHub Pages
 
 on:
   push:
     branches: [main, master]
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
 
+# Least privilege by default; the deploy job opts into the Pages permissions.
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   test:
@@ -33,8 +29,19 @@ jobs:
       - run: node --test
 
   deploy:
+    # Never deploy from a pull request — this keeps PRs from touching the live
+    # site. Only a push to main/master (or a manual dispatch) publishes.
+    if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Serialise deploys; let an in-flight publish finish rather than cancel it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
