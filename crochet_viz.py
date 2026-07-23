@@ -47,12 +47,14 @@ def render_dress_svg(
     palette: Optional[Dict[str, str]] = None,
     width: int = 520,
     height: int = 820,
+    schematic: bool = False,
 ) -> str:
     """Return an SVG string picturing the dress described by ``result``.
 
     ``result`` is a :func:`crochet_core.compute_pattern` return value; ``inp``
     is the input that produced it (for measurements and spot sizes). ``palette``
     optionally overrides the default hex colours (keys: cap, spot, body).
+    ``schematic=True`` overlays the finished measurements as labelled callouts.
     """
     pal = {**DEFAULT_PALETTE, **(palette or {})}
     meta = result["meta"]
@@ -290,6 +292,27 @@ def render_dress_svg(
         mx = _lerp(cx - hem_half * 0.9, cx + hem_half * 0.9, t)
         my = y_hem - 26
         _mushroom(parts, mx, my, 9, pal)
+
+    # ---------- schematic measurement callouts ----------
+    if schematic:
+        ink = "#5b4038"
+
+        def hlabel(half: float, y: float, label: str) -> None:
+            x2 = width - 116
+            parts.append(f'<line x1="{_e(cx + half)}" y1="{_e(y)}" x2="{_e(x2)}" y2="{_e(y)}" stroke="{ink}" stroke-width="1" stroke-dasharray="2 2"/>')
+            parts.append(f'<circle cx="{_e(cx + half)}" cy="{_e(y)}" r="2.2" fill="{ink}"/>')
+            parts.append(f'<text x="{_e(x2 + 5)}" y="{_e(y + 4)}" font-family="Nunito,sans-serif" font-size="11.5" fill="{ink}">{html.escape(label)}</text>')
+
+        hlabel(fl_top_half, y_fl_top, f"upper bust {_fmt(upper_bust, u)}")
+        hlabel(waist_half, y_waist, f"waist {_fmt(meta['waistbandCirc'], u)}")
+        hlabel(hem_half, y_hem, f"hem {_fmt(hem, u)}")
+
+        # vertical skirt-length dimension on the left
+        lx = 48
+        parts.append(f'<line x1="{lx}" y1="{_e(y_waist)}" x2="{lx}" y2="{_e(y_hem)}" stroke="{ink}" stroke-width="1"/>')
+        for yy in (y_waist, y_hem):
+            parts.append(f'<line x1="{lx - 4}" y1="{_e(yy)}" x2="{lx + 4}" y2="{_e(yy)}" stroke="{ink}" stroke-width="1"/>')
+        parts.append(f'<text x="{lx + 7}" y="{_e((y_waist + y_hem) / 2)}" font-family="Nunito,sans-serif" font-size="11.5" fill="{ink}">skirt {html.escape(_fmt(skirt_len, u))}</text>')
 
     # ---------- caption ----------
     parts.append(

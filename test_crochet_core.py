@@ -371,6 +371,17 @@ def test_visualizer_renders_well_formed_svg_for_single_and_multi_size():
         assert "ellipse" in svg  # spots got drawn
 
 
+def test_visualizer_schematic_adds_measurement_labels():
+    import xml.dom.minidom
+    from crochet_viz import render_dress_svg
+    inp = default_input()
+    plain = render_dress_svg(compute_pattern(inp), inp)
+    labelled = render_dress_svg(compute_pattern(inp), inp, schematic=True)
+    xml.dom.minidom.parseString(labelled)   # still well-formed
+    assert "waist" in labelled and "hem" in labelled and "upper bust" in labelled
+    assert len(labelled) > len(plain)       # callouts were added
+
+
 def test_visualizer_is_deterministic():
     from crochet_viz import render_dress_svg
     inp = default_input()

@@ -75,10 +75,11 @@ class Handler(BaseHTTPRequestHandler):
 
         inp = payload.get("input") or {}
         palette = payload.get("palette")
+        schematic = bool(payload.get("schematic"))
         try:
             result = compute_pattern(inp)
             result = convert_terms(result, (inp.get("terms") or "US"))
-            svg = render_dress_svg(result, inp, palette)
+            svg = render_dress_svg(result, inp, palette, schematic=schematic)
         except ValueError as exc:
             return self._json(422, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001 - report cleanly to the client

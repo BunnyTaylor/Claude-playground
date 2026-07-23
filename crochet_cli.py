@@ -110,6 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--yarn", action="store_true", help="append a rough yarn estimate")
     o.add_argument("--json", action="store_true", help="emit the full result as JSON")
     o.add_argument("--svg", metavar="FILE", help="also write an SVG dress visualization to FILE")
+    o.add_argument("--schematic", action="store_true", help="label finished measurements on the SVG")
     o.add_argument("--dump-config", metavar="FILE", help="write the resolved input to FILE and exit")
     o.add_argument("--no-chart", action="store_true", help="skip the ASCII spot chart")
     o.add_argument("--no-color", action="store_true", help="disable ANSI colour")
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             from crochet_viz import render_dress_svg
             with open(args.svg, "w", encoding="utf-8") as fh:
-                fh.write(render_dress_svg(result, inp))
+                fh.write(render_dress_svg(result, inp, schematic=args.schematic))
         except OSError as exc:
             print(f"error: could not write SVG: {exc}", file=sys.stderr)
             return 2

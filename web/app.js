@@ -122,7 +122,7 @@ async function generate() {
   try {
     const res = await fetch("/api/pattern", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input, palette }),
+      body: JSON.stringify({ input, palette, schematic: $("schematic").checked }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);

@@ -114,8 +114,10 @@ unchanged.
 front view of the finished dress — off-shoulder flounce, lantern sleeves,
 fitted waist, A-line skirt, scallop frills and hem mushrooms — scaled from the
 real circumferences, with spots scattered in whatever sizes the design uses
-(seeded, so the same input always draws the same picture). The web UI shows it
-live; the CLI writes it with `--svg`; call it directly for your own renderer.
+(seeded, so the same input always draws the same picture). Pass `schematic=True`
+(UI: the **Measurements** toggle; CLI: `--svg out.svg --schematic`) to overlay
+the finished dimensions as labelled callouts. The web UI shows it live; the CLI
+writes it with `--svg`; call it directly for your own renderer.
 
 ## Silhouettes & terminology
 
@@ -234,6 +236,5 @@ Natural next steps, roughly in value order:
 
 1. **Editable spot layout** — drag spots on the preview, save custom scatters.
 2. **More silhouettes** — tiered skirt, midi/maxi presets, high-neck variant.
-3. **Schematic measurements** — label the finished dimensions on the SVG.
-4. **Proper PDF export** (currently the browser's print dialog).
-5. **Photo progress log** per project, alongside the row counter.
+3. **Proper PDF export** (currently the browser's print dialog).
+4. **Photo progress log** per project, alongside the row counter.
