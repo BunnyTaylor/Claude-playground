@@ -27,6 +27,7 @@
 <!-- ============ HOME ============ -->
 <div class="wrap" id="homeView">
   <div id="collections"></div>
+  <div id="swatches"></div>
   <div id="homeProjects"></div>
   <p class="foot">Everything runs in your browser and saves to this device — no account, nothing uploaded. More pattern collections coming.</p>
 </div>
@@ -127,6 +128,12 @@
           <input type="number" id="scSts" value="16" step="0.5"><input type="number" id="scRows" value="18" step="0.5">
           <input type="number" id="scW" value="10" step="0.1"><input type="number" id="scH" value="10" step="0.1">
         </div>
+        <div id="gaugeDerived" class="gnote"></div>
+        <div class="two" style="margin-top:8px">
+          <input type="text" id="swatchName" placeholder="Swatch name (e.g. DK cotton 3.5mm)">
+          <button class="btn ghost sm" id="saveSwatchBtn">💾 Save swatch</button>
+        </div>
+        <select id="useSwatch"><option value="">Load a saved swatch…</option></select>
 
         <!-- HAT inputs -->
         <div id="hatInputs" hidden>

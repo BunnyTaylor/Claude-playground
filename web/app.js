@@ -1,12 +1,14 @@
 "use strict";
-/* Mushroom Dress — front-end. Talks to the Python engine over /api/pattern,
- * renders the visualization + written pattern, and persists projects in
- * localStorage (multiple named projects, saved in the browser). */
+/* Crochet Pattern Studio — front-end. Runs the engine in the browser
+ * (crochet-core.js / crochet-viz.js) and persists projects, progress and
+ * gauge swatches in localStorage. Nothing leaves the device. */
 
 const $ = (id) => document.getElementById(id);
 const LS_PROJECTS = "mushroom.projects.v1";
 const LS_WORKING = "mushroom.working.v1";
 const LS_PROGRESS = "mushroom.progress.v1";
+const LS_SWATCHES = "mushroom.swatches.v1";
+const round1 = (n) => Math.round(n * 10) / 10;
 
 let unit = "cm";
 let terms = "US";
@@ -137,6 +139,7 @@ function generate() {
     result.svg = CrochetViz.render(result, input, palette, { schematic: $("schematic").checked });
     result.yarn = CrochetCore.estimateYarn(result);
     render(result);
+    updateGaugeDerived();
     $("status").textContent = "updated";
   } catch (err) {
     $("status").textContent = "error: " + err.message;
@@ -186,22 +189,104 @@ function route() {
 }
 
 function renderHome() {
-  $("collections").innerHTML = Registry.collections.map((c) => `
-    <div class="collection">
-      <h2>${c.emoji} ${esc(c.name)}</h2>
-      <p class="ctag">${esc(c.tagline)}</p>
-      <div class="gallery">
-        ${c.generators.map((g) => `
-          <button class="gcard" data-coll="${c.id}" data-gen="${g.id}">
-            <div class="gemoji">${g.emoji}</div>
-            <div class="gname">${esc(g.label)}</div>
-            <div class="gblurb">${esc(g.blurb)}</div>
-            <div class="ggo">Open studio →</div>
-          </button>`).join("")}
-        <div class="gcard soon"><div class="gemoji">✨</div><div class="gname">More coming</div><div class="gblurb">New collections and patterns will appear here.</div></div>
-      </div>
-    </div>`).join("");
+  // one card per collection — the studio's Make switch picks the component
+  $("collections").innerHTML = `<div class="collection"><h2>Patterns</h2>
+    <div class="gallery">` +
+    Registry.collections.map((c) => `
+      <button class="gcard" data-coll="${c.id}" data-gen="${c.generators[0].id}">
+        <div class="gemoji">${c.emoji}</div>
+        <div class="gname">${esc(c.name)}</div>
+        <div class="gblurb">${esc(c.tagline)}</div>
+        <div class="ggo">${c.generators.map((g) => esc(g.label)).join(" · ")} — open →</div>
+      </button>`).join("") +
+    `<div class="gcard soon"><div class="gemoji">✨</div><div class="gname">More coming</div><div class="gblurb">New collections and patterns will appear here.</div></div>
+    </div></div>`;
+  renderSwatches();
   renderHomeProjects();
+}
+
+/* ---------- gauge swatches ---------- */
+
+const loadSwatches = () => { try { return JSON.parse(localStorage.getItem(LS_SWATCHES)) || {}; } catch { return {}; } };
+const saveSwatches = (s) => localStorage.setItem(LS_SWATCHES, JSON.stringify(s));
+
+function gatherGauges() {
+  const num = (id) => parseFloat($(id).value);
+  const g = {};
+  for (const k of GAUGES) g[k] = { sts: num(k + "Sts"), rows: num(k + "Rows"), width: num(k + "W"), height: num(k + "H") };
+  return g;
+}
+
+// per-stitch density in the given unit (st & row per cm, or per inch)
+function densityIn(gauge, u) {
+  try {
+    const d = CrochetCore.density(gauge, u);
+    const per = u === "in" ? 2.54 : 1;
+    return { st: round1(d.st * per), row: round1(d.row * per) };
+  } catch { return null; }
+}
+
+function updateGaugeDerived() {
+  const parts = GAUGES.map((k) => {
+    const g = { sts: parseFloat($(k + "Sts").value), rows: parseFloat($(k + "Rows").value), width: parseFloat($(k + "W").value), height: parseFloat($(k + "H").value) };
+    const d = densityIn(g, unit);
+    return d ? `<b>${k}</b> ${d.st}×${d.row}` : "";
+  }).filter(Boolean).join(" · ");
+  $("gaugeDerived").innerHTML = parts ? `≈ ${parts} <span style="opacity:.7">st×row per ${unit}</span>` : "";
+}
+
+function saveCurrentSwatch() {
+  const name = ($("swatchName").value || "").trim() || "Untitled swatch";
+  const s = loadSwatches();
+  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, gauges: gatherGauges() };
+  saveSwatches(s);
+  populateSwatchSelect();
+  $("status").textContent = `saved swatch “${name}”`;
+}
+
+function applySwatch(id) {
+  const s = loadSwatches()[id];
+  if (!s) return;
+  unit = s.unit || "cm";
+  for (const b of $("unitSeg").children) b.classList.toggle("on", b.dataset.unit === unit);
+  for (const k of GAUGES) {
+    $(k + "Sts").value = s.gauges[k].sts; $(k + "Rows").value = s.gauges[k].rows;
+    $(k + "W").value = s.gauges[k].width; $(k + "H").value = s.gauges[k].height;
+  }
+}
+
+function populateSwatchSelect() {
+  const s = loadSwatches();
+  const ids = Object.keys(s).sort((a, b) => s[b].savedAt - s[a].savedAt);
+  $("useSwatch").innerHTML = `<option value="">Load a saved swatch…</option>` +
+    ids.map((id) => `<option value="${id}">${esc(s[id].name)}</option>`).join("");
+}
+
+function renderSwatches() {
+  const guide = `<details class="refbox"><summary>How to make a gauge swatch</summary><div class="guide">
+    <p>A swatch tells the maths how big your stitches really are — get it right and everything fits.</p>
+    <ul>
+      <li>Work a swatch <b>12–15 cm square</b> in the stitch, with the yarn and hook you'll use for that part.</li>
+      <li><b>Let it rest before measuring.</b> Ribbing springs back — measure it <b>relaxed</b>, not stretched.</li>
+      <li>Lay it flat; count the <b>stitches across a width</b> and the <b>rows down a height</b> (pin the span). A bigger counted span is more accurate.</li>
+      <li>Enter the stitches, rows, and the <b>width &amp; height you measured</b> — it needn't be 10 cm, and non-square is fine (width sets stitch gauge, height sets row gauge).</li>
+      <li><b>Swatch each stitch separately</b> — rib (waistband &amp; cuffs), hdc (skirt/bag) and sc (flounce/sleeves/hat) come out different from the same yarn.</li>
+    </ul>
+    <p>Density is then <b>stitches ÷ width</b> and <b>rows ÷ height</b> — that's what every count is built from.</p>
+  </div></details>`;
+  const sw = loadSwatches();
+  const ids = Object.keys(sw).sort((a, b) => sw[b].savedAt - sw[a].savedAt);
+  const cards = ids.length ? ids.map((id) => {
+    const s = sw[id], u = s.unit || "cm";
+    const dens = GAUGES.map((k) => { const d = densityIn(s.gauges[k], u); return `<span class="sd"><b>${k}</b>${d ? d.st + " × " + d.row : "—"}</span>`; }).join("");
+    return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
+      <div class="swd">${dens}</div>
+      <div class="swm">st × row per ${u}, from your sts÷width &amp; rows÷height</div>
+      <button class="btn ghost sm" data-usesw="${id}">Use in studio →</button></div>`;
+  }).join("") : `<div class="empty">No swatches yet — measure your gauge in the studio and hit “Save swatch”.</div>`;
+  $("swatches").innerHTML = `<div class="homeproj"><h2>Gauge swatches</h2>
+    <p class="ctag" style="margin-bottom:10px">Save the gauges you measure and reuse them across patterns — density is stitches ÷ the distance you counted.</p>
+    ${guide}<div class="swlist">${cards}</div></div>`;
 }
 
 function renderHomeProjects() {
@@ -439,6 +524,21 @@ function wire() {
   $("backBtn").addEventListener("click", showHome);
   addEventListener("hashchange", route);
 
+  // gauge swatches
+  $("saveSwatchBtn").addEventListener("click", saveCurrentSwatch);
+  $("useSwatch").addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    applySwatch(e.target.value);
+    e.target.value = "";
+    generate();
+  });
+  $("swatches").addEventListener("click", (e) => {
+    const use = e.target.closest("[data-usesw]");
+    const del = e.target.closest("[data-delsw]");
+    if (use) { applySwatch(use.dataset.usesw); openStudio(curColl.id, curGen.id); }
+    else if (del) { const s = loadSwatches(); delete s[del.dataset.delsw]; saveSwatches(s); renderSwatches(); populateSwatchSelect(); }
+  });
+
   for (const btn of $("lenPresets").children) {
     btn.addEventListener("click", () => {
       const cm = parseFloat(btn.dataset.len);
@@ -606,6 +706,7 @@ function DEFAULT_STATE() {
   try { working = JSON.parse(localStorage.getItem(LS_WORKING)); } catch { working = null; }
   if (working && working.input) apply(working);   // prime the form fields
   renderProjects();
+  populateSwatchSelect();
   buildTypeSwitch(curColl);
   route();   // #/coll/gen → that studio; otherwise the home page
 })();

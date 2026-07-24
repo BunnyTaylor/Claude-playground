@@ -31,6 +31,16 @@ Dockerfile              self-host on any Docker host (nginx static)
 .github/workflows/      auto-deploy to GitHub Pages on push
 ```
 
+## Gauge swatches
+
+The home page has a **Gauge swatches** section: a how-to-swatch guide plus saved
+swatch records. Measure your gauge in the studio (stitches, rows, and the
+width & height you counted them over — for rib, hdc and sc separately), hit
+**Save swatch**, and it's stored with its derived density (`stitches ÷ width`
+and `rows ÷ height`, shown as st × row per cm/inch). Reuse a saved swatch in any
+pattern with **Use in studio**. The studio also shows the current gauge's
+derived density live under the gauge inputs. All of it stays in the browser.
+
 ## Adding a pattern generator
 
 The app is data-driven, so a new pattern is three steps:
