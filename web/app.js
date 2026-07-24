@@ -560,6 +560,7 @@ function fillReference() {
     ["ch", "chain"], ["sl st", "slip stitch"], ["sc", "single crochet"],
     ["hdc", "half double crochet"], ["dc", "double crochet"], ["tr", "treble"],
     ["fpdc", "front post dc"], ["bpdc", "back post dc"], ["2tog", "2 stitches together (decrease)"],
+    ["fsc", "foundation sc (chainless, stretchy start)"], ["blo", "back loop only (makes ribs)"],
     ["rep", "repeat"], ["sk", "skip"], ["rnd", "round"], ["rem", "remaining"],
     ["join", "sl st to first st of round"], ["* … *", "repeat between the stars"],
   ];

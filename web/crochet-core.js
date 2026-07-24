@@ -147,16 +147,17 @@ var CrochetCore = (function () {
     var wbCirc = waist + S.waistEase;
     var wbSts = even(jsround(wbCirc * rib.st));
     var wbRnds = Math.max(4, jsround(12 * rib.row));
+    var wbSideways = Math.max(6, jsround(wbRnds * rib.st / rib.row));  // band height in sts for the sideways option
     pieces.push({
       id: "waistband", title: "Fitted waistband", stitch: "in the round · fpdc/bpdc rib",
       counts: { sts: wbSts, rounds: wbRnds, circumference: wbCirc },
       progress: { total: wbRnds, start: wbSts, end: wbSts, incRounds: [] },
       steps: [
-        ["Foundation", "Ch " + wbSts + ". Taking care not to twist, join with sl st to form a ring."],
-        ["Rnd 1", "Ch 1, sc in each ch around, join. (" + wbSts + " sc)"],
-        ["Rnd 2", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. (" + wbSts + " sts)"],
-        ["Rnds 3–" + wbRnds, "Rep Rnd 2."],
-        ["Finish", "Fasten off. Test it stretches over your hips before continuing."]
+        ["Foundation (stretchy start)", "Work " + wbSts + " foundation sc (fsc) and join into a ring, taking care not to twist. A foundation row stretches with the rib; a starting chain locks the edge and won't clear your hips — so we skip the chain."],
+        ["Rnd 1", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. (" + wbSts + " sts)"],
+        ["Rnds 2–" + wbRnds, "Rep Rnd 1."],
+        ["Max-stretch option", "For the stretchiest band, work the rib sideways instead: ch " + wbSideways + ", sc in back loop only across; ch 1, turn, and rep, working rows until the strip reaches " + H(wbCirc) + " gently stretched. Seam the short ends into a ring, then work the skirt set-up round into the row-ends (its stitch count replaces the " + wbSts + " above)."],
+        ["Finish", "Fasten off. Seam and test it pulls over your hips before crocheting the skirt."]
       ]
     });
 
@@ -252,10 +253,11 @@ var CrochetCore = (function () {
     var topSts = jsround((upperArm + 4) * sc.st);
     var cuffRnds = Math.max(3, jsround(5 * rib.row));
     var slRnds = Math.max(cuffRnds + 6, cuffRnds + jsround((sleeveLen - 5) * sc.row));
+    var cuffSideways = Math.max(6, jsround(cuffRnds * rib.st / rib.row));  // cuff height in sts for the sideways option
     var sleeveSteps = [
-      ["Foundation", "In " + C.cap + ", ch " + cuffSts + ". Join to form a ring."],
-      ["Rnd 1", "Ch 1, sc in each ch around, join. (" + cuffSts + " sc)"],
-      ["Cuff rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + cuffRnds + "."],
+      ["Foundation (stretchy start)", "In " + C.cap + ", work " + cuffSts + " foundation sc (fsc) and join into a ring — the foundation row stretches with the rib so the cuff can pass over your hand; a starting chain can't."],
+      ["Cuff rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + cuffRnds + ". (" + cuffSts + " sts)"],
+      ["Max-stretch option", "Or work the cuff sideways for more give: ch " + cuffSideways + ", sc in back loop only across; ch 1, turn, and rep until the strip fits around your wrist gently stretched, seam into a ring, then pick up " + scCuff + " sc along the edge for the sleeve."],
       ["Rnd " + (cuffRnds + 1), "Ch 1, " + evenAdjust(cuffSts, scCuff, "sc") + ", join. (" + cuffSts + " rib sts → " + scCuff + " sc)"]
     ];
     var cur = scCuff, rnd = cuffRnds + 1;
