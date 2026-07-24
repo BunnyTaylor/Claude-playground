@@ -127,9 +127,22 @@ through any refactor:
 - skirt-top circumference lands within 1.5 cm of the true waist
 - cm and inch inputs for the same body produce the same pattern (±2 sts)
 
-Known-good default output: waistband 124 sts × 11 rnds; skirt 104 → 193 hdc,
-50 rnds; flounce 134 → 241 sc, 29 rnds; spots 4 × 5, repeat 9 × 10; sleeves
-32 rib → 67 balloon. If a refactor changes these, something broke.
+Known-good default output: skirt 104 → 193 hdc, 50 rnds; flounce 134 → 241 sc,
+29 rnds; spots 4 × 5, repeat 9 × 10; sleeves → 67 balloon. The waistband
+depends on the ribbing style — **sideways** (default) is 62 rows around × 22
+tall; the **in-the-round** option is 124 sts × 11 rnds. If a refactor changes
+these, something broke.
+
+### Ribbing (waistband & cuffs)
+
+A starting chain is the least-stretchy part of a piece and fights the stretch
+ribbing is there to give. So the default is **sideways back-loop-only rib** —
+worked as a flat strip with the rows running around the body and seamed into a
+ring (the crochet equivalent of knit ribbing, and the stretchiest option). The
+`style.ribStyle` option (`"sideways"` default, or `"post"` for in-the-round
+fpdc/bpdc rib off a chainless foundation) is exposed in the UI (**Ribbing**
+selector) and the CLI (`--rib-style`). In sideways mode the band is sized by
+*rows around*, and the skirt/sleeve is worked into the row-ends.
 
 ## The engine
 

@@ -46,6 +46,7 @@ function gather() {
     flare: num("flare"), balloon: num("balloon"),
     dotGap: parseFloat($("dotGap").value),
     dotDia: sizes.length ? sizes[0] : 2.5,
+    ribStyle: $("ribStyle").value,
   };
   // one size -> uniform tapestry bands; several -> a scattered mix
   if (sizes.length > 1) style.dotSizes = sizes;
@@ -108,6 +109,7 @@ function apply(state) {
   setSelect("fullness", S.fullness);
   setSelect("flare", S.flare);
   setSelect("balloon", S.balloon);
+  setSelect("ribStyle", S.ribStyle || "sideways");
   if (ui) {
     $("capCol").value = ui.capCol || "#B83A2B";
     $("spotCol").value = ui.spotCol || "#FCF8EF";
@@ -585,7 +587,7 @@ function DEFAULT_STATE() {
         sc: { sts: 16, rows: 18, width: 10, height: 10 },
       },
       body: { bust: 92, waist: 74, upperBust: 84, hip: 98, upperArm: 30, wrist: 16, skirtLen: 45, sleeveLen: 50 },
-      style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, dotSizes: [1.5, 2.5, 3.5] },
+      style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, dotSizes: [1.5, 2.5, 3.5], ribStyle: "sideways" },
       accessory: { headCirc: 56, sideHeight: 8, brimWidth: 5, diameter: 18, height: 22, strapLen: 70 },
       colors: { cap: "cap colour", spot: "spot colour", body: "body colour" },
     },
