@@ -233,3 +233,8 @@ table.uk td:first-child{font-weight:700;color:var(--amanita-deep);}
 .guide{font-size:13px;line-height:1.6;padding:2px 0 12px;}
 .guide ul{margin:6px 0;padding-left:18px;}
 .guide b{color:var(--amanita-deep);}
+
+.gnote{font-size:12px;color:var(--ink-soft);line-height:1.5;}
+.swcard .swy{font-size:12px;color:var(--moss);font-weight:700;margin-bottom:6px;}
+#swInstr{padding:14px 16px;}
+#swInstr .guide{padding:0;}

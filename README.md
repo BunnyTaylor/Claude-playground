@@ -33,13 +33,20 @@ Dockerfile              self-host on any Docker host (nginx static)
 
 ## Gauge swatches
 
-The home page has a **Gauge swatches** section: a how-to-swatch guide plus saved
-swatch records. Measure your gauge in the studio (stitches, rows, and the
-width & height you counted them over — for rib, hdc and sc separately), hit
-**Save swatch**, and it's stored with its derived density (`stitches ÷ width`
-and `rows ÷ height`, shown as st × row per cm/inch). Reuse a saved swatch in any
-pattern with **Use in studio**. The studio also shows the current gauge's
-derived density live under the gauge inputs. All of it stays in the browser.
+There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved one)
+that records a gauge with the **yarn it was measured on** (brand, line, fibre,
+weight, hook, colourway) and gives **construction-aware, per-stitch
+instructions** — because a flat back-and-forth swatch doesn't equal
+in-the-round fabric. The rib swatch is worked flat in back-loop-only sc (which
+*is* how the sideways band is made); the hdc/sc swatches are worked in the
+round (or flat-without-turning), and the tool explains the back-loop/front-loop
+trick for mimicking in-the-round BLO flat.
+
+Each saved swatch shows its derived density (`stitches ÷ width` and
+`rows ÷ height`, as st × row per cm/inch). **Use in studio** applies it to a
+project (only the gauges you actually measured). You can also quick-**Save
+swatch** straight from the studio gauge panel, which shows the current gauge's
+derived density live. All of it stays in the browser.
 
 ## Adding a pattern generator
 

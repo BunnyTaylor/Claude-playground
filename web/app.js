@@ -166,6 +166,7 @@ function setGenerator(gen) {
 
 function showHome() {
   $("studioView").hidden = true;
+  $("swatchView").hidden = true;
   $("homeView").hidden = false;
   renderHome();
   if (location.hash !== "#/") location.hash = "#/";
@@ -177,13 +178,17 @@ function openStudio(collId, genId, setHash = true) {
   buildTypeSwitch(curColl);
   setGenerator(f.generator);
   $("homeView").hidden = true;
+  $("swatchView").hidden = true;
   $("studioView").hidden = false;
   if (setHash) location.hash = "#/" + curColl.id + "/" + f.generator.id;
   generate();
 }
 
 function route() {
-  const m = (location.hash || "").match(/^#\/([^/]+)\/([^/]+)/);
+  const hash = location.hash || "";
+  const sw = hash.match(/^#\/swatch(?:\/([^/]+))?/);
+  if (sw) { openSwatch(sw[1], false); return; }
+  const m = hash.match(/^#\/([^/]+)\/([^/]+)/);
   if (m && Registry.find(m[1], m[2])) openStudio(m[1], m[2], false);
   else showHome();
 }
@@ -250,8 +255,10 @@ function applySwatch(id) {
   unit = s.unit || "cm";
   for (const b of $("unitSeg").children) b.classList.toggle("on", b.dataset.unit === unit);
   for (const k of GAUGES) {
-    $(k + "Sts").value = s.gauges[k].sts; $(k + "Rows").value = s.gauges[k].rows;
-    $(k + "W").value = s.gauges[k].width; $(k + "H").value = s.gauges[k].height;
+    const g = s.gauges[k] || {};
+    if (!(g.sts > 0 && g.width > 0)) continue;   // only apply gauges that were actually measured
+    $(k + "Sts").value = g.sts; $(k + "Rows").value = g.rows;
+    $(k + "W").value = g.width; $(k + "H").value = g.height;
   }
 }
 
@@ -279,14 +286,129 @@ function renderSwatches() {
   const cards = ids.length ? ids.map((id) => {
     const s = sw[id], u = s.unit || "cm";
     const dens = GAUGES.map((k) => { const d = densityIn(s.gauges[k], u); return `<span class="sd"><b>${k}</b>${d ? d.st + " × " + d.row : "—"}</span>`; }).join("");
+    const y = s.yarn || {};
+    const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
+      ${yline ? `<div class="swy">${esc(yline)}</div>` : ""}
       <div class="swd">${dens}</div>
       <div class="swm">st × row per ${u}, from your sts÷width &amp; rows÷height</div>
-      <button class="btn ghost sm" data-usesw="${id}">Use in studio →</button></div>`;
-  }).join("") : `<div class="empty">No swatches yet — measure your gauge in the studio and hit “Save swatch”.</div>`;
-  $("swatches").innerHTML = `<div class="homeproj"><h2>Gauge swatches</h2>
-    <p class="ctag" style="margin-bottom:10px">Save the gauges you measure and reuse them across patterns — density is stitches ÷ the distance you counted.</p>
+      <div class="btnrow" style="margin-top:0"><button class="btn ghost sm" data-usesw="${id}">Use in studio →</button><button class="btn ghost sm" data-editsw="${id}">Edit</button></div></div>`;
+  }).join("") : `<div class="empty">No swatches yet — make one in the swatch tool, or hit “Save swatch” in the studio.</div>`;
+  $("swatches").innerHTML = `<div class="homeproj">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Gauge swatches</h2>
+      <button class="btn sm" id="newSwatchBtn">＋ New swatch</button>
+    </div>
+    <p class="ctag" style="margin:6px 0 10px">Save the gauges you measure — with the yarn you used — and reuse them across patterns. Density is stitches ÷ the distance you counted.</p>
     ${guide}<div class="swlist">${cards}</div></div>`;
+}
+
+/* ---------- swatch tool (dedicated tab) ---------- */
+
+let swUnit = "cm", swEditId = null, curSwStitch = "rib";
+const SW_GAUGE_IDS = {
+  rib: ["swRibSts", "swRibRows", "swRibW", "swRibH"],
+  hdc: ["swHdcSts", "swHdcRows", "swHdcW", "swHdcH"],
+  sc: ["swScSts", "swScRows", "swScW", "swScH"],
+};
+const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
+const SWATCH_INSTR = {
+  rib: `<div class="guide"><p><b>Rib — worked sideways, flat, back-loop only.</b> The waistband and cuffs are a flat strip you seam into a ring, so swatch them exactly that way — this is the one part where flat is right.</p>
+    <ul>
+      <li>Ch 12–16. Row 1: sc in 2nd ch from hook and each ch across.</li>
+      <li>Every row after: ch 1, turn, <b>sc in the back loop only</b> across.</li>
+      <li>Work ~15 cm, then let it rest — rib springs back, so measure it <b>relaxed</b>.</li>
+      <li>Count <b>sts across the foundation</b> (the short edge) and <b>ridged rows along the length</b>; enter those with the width &amp; height you counted over.</li>
+    </ul>
+    <p>Back-loop rows leave ridges on both faces — the stretchy reversible rib you'll use. No need to alternate loops here.</p></div>`,
+  hdc: `<div class="guide"><p><b>Hdc — worked in the round</b> (the skirt and bag body). Gauge in the round differs from flat, so swatch it in the round for the truest fit.</p>
+    <ul>
+      <li><b>Best:</b> work a short tube or a flat disc in hdc with the right side always facing, and measure a calm area away from the edges.</li>
+      <li><b>Or</b> work flat <b>without turning</b> — at the end of each row cut/slide the loop and rejoin at the start so the RS always faces you.</li>
+      <li>A turned, back-and-forth flat swatch reads a little differently from the finished round fabric.</li>
+      <li>Rest it, then count sts across a width and rows down a height.</li>
+    </ul></div>`,
+  sc: `<div class="guide"><p><b>Sc — worked in the round</b> (the flounce, sleeves and hat). Same as hdc: swatch in the round (tube/disc) or flat-without-turning, keeping the <b>right side always facing</b>.</p>
+    <p><b>Why flat ≠ round:</b> in the round you always work into the back loop on the RS, giving a consistent one-sided ridge. To mimic that flat you'd have to work <b>back loops on RS rows and front loops on WS rows</b> — otherwise turning flips which loop faces you and the ridges don't line up. (Our rib sidesteps this by being worked sideways.)</p>
+    <p>Rest it, then count sts across a width and rows down a height.</p></div>`,
+};
+
+function swSetStitch(st) {
+  curSwStitch = st;
+  for (const b of $("swStitchSeg").children) b.classList.toggle("on", b.dataset.st === st);
+  $("swInstr").innerHTML = SWATCH_INSTR[st];
+}
+
+function updateSwDerived() {
+  const parts = GAUGES.map((k) => {
+    const [s, r, w, h] = SW_GAUGE_IDS[k];
+    const g = { sts: parseFloat($(s).value), rows: parseFloat($(r).value), width: parseFloat($(w).value), height: parseFloat($(h).value) };
+    const d = densityIn(g, swUnit);
+    return d ? `<b>${k}</b> ${d.st}×${d.row}` : "";
+  }).filter(Boolean).join(" · ");
+  $("swDerived").innerHTML = parts ? `≈ ${parts} <span style="opacity:.7">st×row per ${swUnit}</span>` : "";
+}
+
+function clearSwatchForm() {
+  $("swName").value = "";
+  for (const id of SW_YARN) $(id).value = "";
+  for (const k of GAUGES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
+  swUnit = unit;
+  for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
+}
+
+function loadSwatchForm(rec) {
+  $("swName").value = rec.name || "";
+  const y = rec.yarn || {};
+  $("swBrand").value = y.brand || ""; $("swLine").value = y.line || ""; $("swFiber").value = y.fiber || "";
+  $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || ""; $("swColorway").value = y.colorway || "";
+  swUnit = rec.unit || "cm";
+  for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
+  for (const k of GAUGES) {
+    const g = (rec.gauges && rec.gauges[k]) || {};
+    const [s, r, w, h] = SW_GAUGE_IDS[k];
+    $(s).value = g.sts > 0 ? g.sts : ""; $(r).value = g.rows > 0 ? g.rows : "";
+    $(w).value = g.width > 0 ? g.width : ""; $(h).value = g.height > 0 ? g.height : "";
+  }
+}
+
+function gatherSwatchRecord() {
+  const num = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
+  const gauges = {};
+  for (const k of GAUGES) {
+    const [s, r, w, h] = SW_GAUGE_IDS[k];
+    gauges[k] = { sts: num(s), rows: num(r), width: num(w), height: num(h) };
+  }
+  return {
+    name: ($("swName").value || "").trim(),
+    unit: swUnit,
+    yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorway: $("swColorway").value.trim() },
+    gauges,
+  };
+}
+
+function openSwatch(id, setHash = true) {
+  $("homeView").hidden = true; $("studioView").hidden = true; $("swatchView").hidden = false;
+  swEditId = id || null;
+  const rec = id ? loadSwatches()[id] : null;
+  if (rec) { loadSwatchForm(rec); $("swTitle").textContent = "Edit swatch"; }
+  else { clearSwatchForm(); $("swTitle").textContent = "New gauge swatch"; }
+  swSetStitch(curSwStitch);
+  updateSwDerived();
+  if (setHash) location.hash = id ? "#/swatch/" + id : "#/swatch";
+}
+
+function saveSwatchFromTool(use) {
+  const rec = gatherSwatchRecord();
+  if (!rec.name) rec.name = [rec.yarn.brand, rec.yarn.weight].filter(Boolean).join(" ") || "Untitled swatch";
+  rec.savedAt = Date.now();
+  const all = loadSwatches();
+  const id = swEditId || ("s" + Date.now().toString(36));
+  all[id] = rec;
+  saveSwatches(all);
+  populateSwatchSelect();
+  if (use) { applySwatch(id); openStudio(curColl.id, curGen.id); }
+  else { showHome(); $("status").textContent = `saved swatch “${rec.name}”`; }
 }
 
 function renderHomeProjects() {
@@ -467,10 +589,11 @@ function scheduleGenerate() {
 function wire() {
   // any input change re-computes (debounced)
   document.querySelectorAll("input, select").forEach((el) => {
-    if (el.type === "button") return;
+    if (el.type === "button" || el.closest("#swatchView")) return;   // swatch tab drives its own preview
     el.addEventListener("input", scheduleGenerate);
     el.addEventListener("change", scheduleGenerate);
   });
+  $("swatchView").addEventListener("input", updateSwDerived);
 
   // unit toggle converts the numeric fields so 92cm becomes 36.2in
   for (const btn of $("unitSeg").children) {
@@ -535,9 +658,28 @@ function wire() {
   $("swatches").addEventListener("click", (e) => {
     const use = e.target.closest("[data-usesw]");
     const del = e.target.closest("[data-delsw]");
-    if (use) { applySwatch(use.dataset.usesw); openStudio(curColl.id, curGen.id); }
+    const edit = e.target.closest("[data-editsw]");
+    if (e.target.closest("#newSwatchBtn")) openSwatch();
+    else if (edit) openSwatch(edit.dataset.editsw);
+    else if (use) { applySwatch(use.dataset.usesw); openStudio(curColl.id, curGen.id); }
     else if (del) { const s = loadSwatches(); delete s[del.dataset.delsw]; saveSwatches(s); renderSwatches(); populateSwatchSelect(); }
   });
+
+  // swatch tool
+  for (const b of $("swStitchSeg").children) b.addEventListener("click", () => swSetStitch(b.dataset.st));
+  for (const btn of $("swUnitSeg").children) {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.unit;
+      if (next === swUnit) return;
+      const f = next === "in" ? (v) => v / 2.54 : (v) => v * 2.54;
+      for (const k of GAUGES) { const ids = SW_GAUGE_IDS[k]; for (const id of [ids[2], ids[3]]) { const v = parseFloat($(id).value); if (!isNaN(v)) $(id).value = Math.round(f(v) * 10) / 10; } }
+      for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === next);
+      swUnit = next; updateSwDerived();
+    });
+  }
+  $("swSaveBtn").addEventListener("click", () => saveSwatchFromTool(false));
+  $("swSaveUseBtn").addEventListener("click", () => saveSwatchFromTool(true));
+  $("swBackBtn").addEventListener("click", showHome);
 
   for (const btn of $("lenPresets").children) {
     btn.addEventListener("click", () => {
