@@ -276,7 +276,7 @@
         </div>
         <div class="two">
           <div class="field"><label>Hook</label><input type="text" id="swHook" placeholder="3.5 mm"></div>
-          <div class="field"><label>Colourway</label><input type="text" id="swColorway" placeholder="name / dye lot"></div>
+          <div class="field"><label>Colourway <span class="hint" style="font-weight:400">(just a note — same yarn &amp; hook gives the same gauge in any colour)</span></label><input type="text" id="swColorway" placeholder="name / dye lot"></div>
         </div>
 
         <div class="group-label">Units</div>
@@ -297,6 +297,9 @@
           <input type="number" id="swScSts" step="0.5"><input type="number" id="swScRows" step="0.5">
           <input type="number" id="swScW" step="0.1"><input type="number" id="swScH" step="0.1"></div>
         <div id="swDerived" class="gnote"></div>
+
+        <div class="group-label">Notes <span class="hint" style="font-weight:400">(optional — blocking, wash behaviour, tension…)</span></div>
+        <div class="field"><textarea id="swNotes" rows="2" placeholder="e.g. blocked &amp; steamed; relaxes ~5% after wash" style="width:100%;font:inherit;padding:8px;box-sizing:border-box;resize:vertical"></textarea></div>
 
         <div class="btnrow" style="margin-top:12px">
           <button class="btn" id="swSaveBtn">💾 Save swatch</button>

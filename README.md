@@ -44,10 +44,14 @@ setting. The hdc/sc swatches are worked in the round (or flat-without-turning), 
 the tool explains the back-loop/front-loop trick for mimicking in-the-round BLO flat.
 
 Each saved swatch shows its derived density (`stitches ÷ width` and
-`rows ÷ height`, as st × row per cm/inch). **Use in studio** applies it to a
-project (only the gauges you actually measured). You can also quick-**Save
-swatch** straight from the studio gauge panel, which shows the current gauge's
-derived density live. All of it stays in the browser.
+`rows ÷ height`, as st × row per cm/inch), plus its colourway and any freeform
+notes (blocking, wash behaviour…) — colour is just a record, it doesn't affect
+gauge, so one yarn/hook can carry many colours at the same gauge. **Use in
+studio** applies it to a project (only the gauges you actually measured);
+**Duplicate** clones a swatch into a new colour/hook variant; and **Export /
+Import** move all your swatches between devices as a JSON file. You can also
+quick-**Save swatch** straight from the studio gauge panel, which shows the
+current gauge's derived density live. All of it stays in the browser.
 
 ## Adding a pattern generator
 
