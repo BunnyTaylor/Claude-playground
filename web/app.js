@@ -17,6 +17,7 @@ let curGen = curColl.generators[0];             // current generator (dress/hat/
 const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs"];
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
+let pendingStatus = null;    // one-shot status message for the next generate() (survives the debounce)
 let LAST = null;             // most recent /api/pattern response
 
 /* ---------- field <-> state ---------- */
@@ -140,7 +141,8 @@ function generate() {
     result.yarn = CrochetCore.estimateYarn(result);
     render(result);
     updateGaugeDerived();
-    $("status").textContent = "updated";
+    $("status").textContent = pendingStatus || "updated";
+    pendingStatus = null;
   } catch (err) {
     $("status").textContent = "error: " + err.message;
   }
@@ -212,7 +214,19 @@ function renderHome() {
 
 /* ---------- gauge swatches ---------- */
 
-const loadSwatches = () => { try { return JSON.parse(localStorage.getItem(LS_SWATCHES)) || {}; } catch { return {}; } };
+// Legacy swatches (and studio quick-saves) stored one `rib` gauge. The tool now
+// tracks BLO vs post rib separately, so normalise old records on load: a `rib`
+// gauge becomes ribPost if it was worked in the round, otherwise ribBlo.
+function migrateSwatchRec(rec) {
+  const g = rec && rec.gauges;
+  if (g && g.rib && !g.ribBlo && !g.ribPost) {
+    const key = g.rib.worked === "round" ? "ribPost" : "ribBlo";
+    g[key] = { ...g.rib, worked: g.rib.worked || (key === "ribPost" ? "round" : "flat") };
+    delete g.rib;
+  }
+  return rec;
+}
+const loadSwatches = () => { try { const s = JSON.parse(localStorage.getItem(LS_SWATCHES)) || {}; for (const id in s) migrateSwatchRec(s[id]); return s; } catch { return {}; } };
 const saveSwatches = (s) => localStorage.setItem(LS_SWATCHES, JSON.stringify(s));
 
 function gatherGauges() {
@@ -242,31 +256,68 @@ function updateGaugeDerived() {
 
 function saveCurrentSwatch() {
   const name = ($("swatchName").value || "").trim() || "Untitled swatch";
+  const g = gatherGauges();   // studio inputs: { rib, hdc, sc }
+  const ribEl = $("ribStyle");
+  const post = !!ribEl && ribEl.value === "post";
+  const gauges = { hdc: { ...g.hdc, worked: "round" }, sc: { ...g.sc, worked: "round" } };
+  gauges[post ? "ribPost" : "ribBlo"] = { ...g.rib, worked: post ? "round" : "flat" };
   const s = loadSwatches();
-  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, gauges: gatherGauges() };
+  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, gauges };
   saveSwatches(s);
   populateSwatchSelect();
   $("status").textContent = `saved swatch “${name}”`;
 }
 
+const swMeasured = (g) => g && g.sts > 0 && g.width > 0;
+
 function applySwatch(id) {
   const s = loadSwatches()[id];
-  if (!s) return;
+  if (!s) return [];
   unit = s.unit || "cm";
   for (const b of $("unitSeg").children) b.classList.toggle("on", b.dataset.unit === unit);
-  for (const k of GAUGES) {
-    const g = s.gauges[k] || {};
-    if (!(g.sts > 0 && g.width > 0)) continue;   // only apply gauges that were actually measured
-    $(k + "Sts").value = g.sts; $(k + "Rows").value = g.rows;
-    $(k + "W").value = g.width; $(k + "H").value = g.height;
-  }
+  const g = s.gauges || {};
+  const applied = [];
+  const fill = (studioKey, src) => {
+    const el = $(studioKey + "Sts");
+    if (!el || !swMeasured(src)) return;
+    $(studioKey + "Sts").value = src.sts; $(studioKey + "Rows").value = src.rows;
+    $(studioKey + "W").value = src.width; $(studioKey + "H").value = src.height;
+    applied.push(studioKey);
+  };
+  // The studio uses a single `rib` gauge; pick the construction matching the
+  // project's Ribbing setting (post columns vs BLO), falling back to whichever
+  // was measured. hdc/sc map straight across.
+  const ribEl = $("ribStyle");
+  const preferPost = !!ribEl && ribEl.value === "post";
+  const ribG = preferPost
+    ? (swMeasured(g.ribPost) ? g.ribPost : g.ribBlo)
+    : (swMeasured(g.ribBlo) ? g.ribBlo : g.ribPost);
+  fill("rib", ribG);
+  fill("hdc", g.hdc);
+  fill("sc", g.sc);
+  return applied;   // studio stitches filled — so callers can report what changed (mixing across yarns)
+}
+
+// which swatch stitches were actually measured (for the dropdown's "covers…" hint)
+function swatchStitches(rec) {
+  return SW_STITCHES.filter((k) => swMeasured(rec.gauges && rec.gauges[k]));
+}
+
+// dropdown label: name — yarn, hook · stitches it covers (so you can tell swatches
+// apart by yarn/hook, and see which stitches loading it will change)
+function swatchLabel(rec) {
+  const y = rec.yarn || {};
+  const desc = [(y.line || y.brand || "").trim(), (y.hook || "").trim()].filter(Boolean).join(", ");
+  const covered = swatchStitches(rec).map((k) => SW_STITCH_LABEL[k]);
+  const tail = [desc, covered.length ? covered.join("/") : ""].filter(Boolean).join(" · ");
+  return rec.name + (tail ? " — " + tail : "");
 }
 
 function populateSwatchSelect() {
   const s = loadSwatches();
   const ids = Object.keys(s).sort((a, b) => s[b].savedAt - s[a].savedAt);
   $("useSwatch").innerHTML = `<option value="">Load a saved swatch…</option>` +
-    ids.map((id) => `<option value="${id}">${esc(s[id].name)}</option>`).join("");
+    ids.map((id) => `<option value="${id}">${esc(swatchLabel(s[id]))}</option>`).join("");
 }
 
 function renderSwatches() {
@@ -285,12 +336,14 @@ function renderSwatches() {
   const ids = Object.keys(sw).sort((a, b) => sw[b].savedAt - sw[a].savedAt);
   const cards = ids.length ? ids.map((id) => {
     const s = sw[id], u = s.unit || "cm";
-    const dens = GAUGES.map((k) => {
-      const d = densityIn(s.gauges[k], u);
-      const w = (s.gauges[k] && s.gauges[k].worked) || SW_REC[k];
-      const tag = d ? ` <em title="worked ${SW_WORKED_LABEL[w]}" style="font-style:normal;color:var(--ink-soft)">${w === "round" ? "↻" : "⇄"}</em>` : "";
-      return `<span class="sd"><b>${k}</b>${d ? d.st + " × " + d.row : "—"}${tag}</span>`;
-    }).join("");
+    const dens = SW_STITCHES.map((k) => {
+      const g = s.gauges && s.gauges[k];
+      const d = densityIn(g, u);
+      if (!d) return "";   // only show rib constructions / stitches actually measured
+      const w = (g && g.worked) || SW_REC[k];
+      const tag = ` <em title="worked ${SW_WORKED_LABEL[w]}" style="font-style:normal;color:var(--ink-soft)">${w === "round" ? "↻" : "⇄"}</em>`;
+      return `<span class="sd"><b>${SW_STITCH_LABEL[k]}</b>${d.st + " × " + d.row}${tag}</span>`;
+    }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no gauges measured</span>`;
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
@@ -310,41 +363,71 @@ function renderSwatches() {
 
 /* ---------- swatch tool (dedicated tab) ---------- */
 
-let swUnit = "cm", swEditId = null, curSwStitch = "rib";
-const SW_REC = { rib: "flat", hdc: "round", sc: "round" };   // how each stitch is worked in the patterns
+// The swatch tool tracks TWO rib constructions independently (they're different
+// stitches with different gauge): back-loop-only (ribBlo) and post-stitch columns
+// (ribPost). Each can be worked flat OR in the round. The studio/engine still use a
+// single `rib` gauge per project (you pick one Ribbing style), so applySwatch maps
+// whichever rib construction matches the studio's Ribbing setting onto that slot.
+const SW_STITCHES = ["ribBlo", "ribPost", "hdc", "sc"];
+const SW_STITCH_LABEL = { ribBlo: "BLO rib", ribPost: "Post rib", hdc: "Hdc", sc: "Sc" };
+let swUnit = "cm", swEditId = null, curSwStitch = "ribBlo";
+const SW_REC = { ribBlo: "flat", ribPost: "round", hdc: "round", sc: "round" };   // the usual way each is worked
 const SW_WORKED_LABEL = { flat: "flat", round: "in the round" };
 let swWorked = { ...SW_REC };
 const SW_GAUGE_IDS = {
-  rib: ["swRibSts", "swRibRows", "swRibW", "swRibH"],
+  ribBlo: ["swRibBloSts", "swRibBloRows", "swRibBloW", "swRibBloH"],
+  ribPost: ["swRibPostSts", "swRibPostRows", "swRibPostW", "swRibPostH"],
   hdc: ["swHdcSts", "swHdcRows", "swHdcW", "swHdcH"],
   sc: ["swScSts", "swScRows", "swScW", "swScH"],
 };
 const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
 const SWATCH_INSTR = {
-  rib: {
-    flat: `<div class="guide"><p><b>Rib — the default sideways band (Ribbing: Sideways).</b> Worked flat, back-loop only, then seamed into a ring. This is the one part of the set that really is flat: the waistband and cuffs are a long thin strip, turned every row, then seamed short-end to short-end. So a flat, turned swatch matches the real fabric exactly.</p>
-    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> The <i>back loop</i> is the far one of the two loops on top of a stitch (the front loop is the near one). A <i>turning chain</i> is the ch 1 you make before turning so the edge stays the right height. <i>RS/WS</i> = right side / wrong side (front/back of the work).</p>
+  ribBlo: {
+    flat: `<div class="guide"><p><b>BLO rib — worked flat</b> (this is the default sideways band). Back-loop-only single crochet, turned every row, worked as a long thin strip and seamed short-end to short-end into a ring. A flat, turned swatch matches this fabric exactly.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> The <i>back loop</i> is the far one of the two loops on top of a stitch (the front loop is the near one); working only into it leaves a stretchy ridge. A <i>turning chain</i> is the ch 1 before you turn. <i>RS/WS</i> = right side / wrong side.</p>
     <p><b>Make it (flat, turned):</b></p>
     <ul>
       <li>Ch 12–16. Row 1: sc in the 2nd ch from the hook and in each ch across.</li>
-      <li>Every row after: ch 1, <b>turn</b>, then <b>sc in the back loop only</b> of each stitch across.</li>
-      <li>Keep going until the strip is ~15 cm / 6 in long. It'll look like ridges — that's the rib.</li>
+      <li>Every row after: ch 1, <b>turn</b>, then <b>sc in the back loop only</b> across.</li>
+      <li>Work ~15 cm / 6 in. Because you turn every row, both faces get ridges — the reversible, stretchy rib.</li>
     </ul>
-    <p><b>Alternative flat styles:</b> some folks like <i>hdc</i> back-loop rib (taller, faster) or a <i>ch-1-turn slip-stitch</i> rib (very stretchy, dense) — either is fine, worked the same way, turning every row. What matters is that you turn: this rib is meant to be reversible, so both faces should match.</p>
-    <p><b>Measure it:</b> rib springs back, so let the strip <b>rest fully relaxed</b> (don't stretch it). Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, and enter each with the width &amp; height you counted over. It's a flat strip, so measuring is easy — just don't pull it taut.</p>
-    <p><b>Two rib constructions, two swatches.</b> This flat one is for the default sideways band. If you switch <b>Ribbing → In the round</b> in the studio, that's a different fabric (post-stitch columns) with a different gauge — keep a <b>separate rib swatch tagged “in the round”</b> for it. Tag this one <b>flat</b>.</p></div>`,
-    round: `<div class="guide"><p><b>Rib — the in-the-round column rib (Ribbing: In the round).</b> Worked in a spiral/round as raised vertical columns using <i>post stitches</i>, never turned. Swatch it in the round so the gauge matches.</p>
-    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> A <i>post stitch</i> is worked around the vertical “post” (the stem) of the stitch below instead of into its top loops. <i>fpdc</i> = front-post double crochet (post pulled toward you), <i>bpdc</i> = back-post (pushed away). Alternating them makes columns stand forward and back — that's the rib. <i>RS</i> = right side, which always faces you in the round.</p>
-    <p><b>Stretchy start — no plain chain.</b> A starting chain is the least-stretchy row and fights the rib, so begin with a <b>foundation single crochet (fsc)</b>, exactly as the pattern does: fsc make a stitch and its own “chain” in one go, so the cast-on edge stretches with the fabric.</p>
+    <p><b>Measure it:</b> let the strip <b>rest fully relaxed</b> (rib springs back — don't stretch it). Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, with the width &amp; height you counted over. It's flat, so measuring is easy.</p>
+    <p>Tag this <b>flat</b>. BLO rib can also be worked <i>in the round</i> (a spiral BLO band) — if that's what you'll make, switch the tag to <b>In the round</b> for the matching guidance.</p></div>`,
+    round: `<div class="guide"><p><b>BLO rib — worked in the round.</b> Same back-loop-only stitch, but spiralled with the RS always facing you (a seamless BLO band). It reads differently from the flat, turned version, so swatch it the way you'll make it.</p>
+    <p class="ctag" style="margin:.4em 0"><b>Why it differs from flat:</b> in the round you always work into the back loop on the RS, so every ridge lands on the same face. Turning a flat swatch flips which loop faces you, so the gauge isn't identical — hence a separate tag.</p>
+    <p><b>Stretchy start — no plain chain.</b> Begin with a <b>foundation single crochet (fsc)</b> ring, not a chain, so the cast-on edge stretches with the rib.</p>
+    <p><b>Make it (in the round):</b></p>
+    <ul>
+      <li>Work ~30 <b>fsc</b> and join into a ring without twisting.</li>
+      <li>Every round: <b>sc in the back loop only</b> around; don't turn — keep spiralling, RS out, ~15 rounds.</li>
+      <li><b>Alternative:</b> work flat <b>without turning</b> (cut/slide and rejoin each row so the RS always faces you) — easier to lay flat and measure, same one-sided fabric.</li>
+    </ul>
+    <p><b>Measuring a round band (a tube won't lie flat):</b> relax it first, then fold the tube flat, measure the <b>folded width and double it</b> for the circumference; <b>stitches around ÷ circumference</b> = stitch density. Count rounds up the height.</p>
+    <p>Tag this <b>in the round</b>.</p></div>`,
+  },
+  ribPost: {
+    round: `<div class="guide"><p><b>Post rib — worked in the round</b> (this is the “Ribbing: In the round” option). Raised vertical columns made with <i>post stitches</i>, spiralled, never turned.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> A <i>post stitch</i> wraps around the vertical “post” (stem) of the stitch below instead of its top loops. <i>fpdc</i> = front-post dc (pulled toward you), <i>bpdc</i> = back-post (pushed away). Alternating them makes columns stand forward and back — the rib. <i>RS</i> = right side, always facing you in the round.</p>
+    <p><b>Stretchy start — no plain chain.</b> Begin with a <b>foundation single crochet (fsc)</b> ring, exactly as the pattern does — it stretches with the rib where a chain wouldn't.</p>
     <p><b>Make it (in the round):</b></p>
     <ul>
       <li>Work ~24 <b>fsc</b> (an even number) and join into a ring without twisting.</li>
       <li>Rnd 1: ch 2, then <b>*fpdc in next st, bpdc in next st; repeat from * around</b>, join.</li>
-      <li>Repeat that round for ~12 rounds. RS always faces out — you never turn.</li>
-      <li><b>Alternative:</b> if a tiny tube is fiddly, work the same rounds <b>flat without turning</b> — cut/slide and rejoin at the start of each round so the RS keeps facing you. Truer than a turned swatch, easier to lay out.</li>
+      <li>Repeat ~12 rounds. RS always faces out — you never turn.</li>
+      <li><b>Alternative:</b> if a tiny tube is fiddly, work the same rounds <b>flat without turning</b> (rejoin at the start each round).</li>
     </ul>
-    <p><b>Measuring a round rib (a tube won't lie flat):</b> let it relax first — post-stitch rib pulls in hard, so measure it <b>unstretched</b>. Lay the tube flat so it folds double, measure the <b>folded width and double it</b> for the circumference; the <b>stitches around ÷ that circumference</b> is your stitch density. Count the <b>rounds up the height</b>. (For a flat-no-turn strip, just measure sts across and rounds down like any flat swatch.)</p>
-    <p>Tag this one <b>in the round</b> — and keep your sideways-band rib swatch separate.</p></div>`,
+    <p><b>Measuring a round rib (a tube won't lie flat):</b> post rib pulls in hard — measure it <b>relaxed</b>. Fold the tube flat, measure the <b>folded width and double it</b> for the circumference; <b>stitches around ÷ circumference</b> = stitch density. Count rounds up the height.</p>
+    <p>Tag this <b>in the round</b>.</p></div>`,
+    flat: `<div class="guide"><p><b>Post rib — worked flat</b> (post-stitch columns worked back and forth, turning every row). Handy if you'd rather make the band as a flat panel and seam it.</p>
+    <p class="ctag" style="margin:.4em 0"><b>The turning catch:</b> a post column has to stay raised on the RS. When you turn to a WS row, the fabric is flipped, so to keep the same column popping forward you work the <i>opposite</i> post stitch from what you see — i.e. work <b>bpdc over the columns that were fpdc</b> (and vice-versa). Miss this and the ribs zig-zag instead of running straight.</p>
+    <p><b>Make it (flat, turned):</b></p>
+    <ul>
+      <li>Start with a <b>foundation single crochet (fsc)</b> row (stretchier than a chain), even number of sts.</li>
+      <li>Row 1 (RS): ch 2, <b>*fpdc, bpdc; rep across</b>, turn.</li>
+      <li>Row 2 (WS): ch 2, work each stitch as its <b>opposite</b> post stitch so the columns line up (fp where you meet a bp, bp where you meet an fp), turn. Repeat.</li>
+    </ul>
+    <p><b>Measure it:</b> relax it first, then count <b>stitches across</b> a width and <b>rows down</b> a height — it lies flat, so measuring is straightforward.</p>
+    <p>Tag this <b>flat</b>. (The pattern's in-the-round option uses the round version — keep that as a separate swatch.)</p></div>`,
   },
   hdc: `<div class="guide"><p><b>Hdc — worked in the round</b> in the patterns (the skirt and the bag body spiral around and around, right side always facing you). Fabric worked in the round can come out a touch different from flat fabric, so for the truest fit, swatch it in the round too.</p>
     <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> <i>In the round</i> = you never turn; the right side (RS, the front) always faces you. <i>Diameter</i> = straight across a circle through the middle; <i>circumference</i> = the distance all the way around = <b>π × diameter</b> (π ≈ 3.14).</p>
@@ -390,23 +473,23 @@ function renderSwInstr() {
 
 function updateSwWorkedNote() {
   const st = curSwStitch, w = swWorked[st], rec = SW_REC[st];
-  if (st === "rib") {
-    $("swWorkedNote").innerHTML = w === "flat"
-      ? `Rib swatch for the <b>default sideways band</b> (Ribbing: Sideways) — worked flat, seamed into a ring.`
-      : `Rib swatch for the <b>in-the-round column rib</b> (Ribbing: In the round). The two rib constructions have different gauge, so keep a <b>separate swatch for each</b> and use the one matching your Ribbing setting.`;
+  if (st === "ribBlo" || st === "ribPost") {
+    const which = st === "ribBlo" ? "back-loop-only (BLO)" : "post-stitch column (fpdc/bpdc)";
+    const usual = st === "ribBlo" ? "the default sideways band is worked flat" : "the pattern's in-the-round option is worked in the round";
+    $("swWorkedNote").innerHTML = `<b>${which}</b> rib, worked <b>${SW_WORKED_LABEL[w]}</b>. Both flat and in-the-round are valid — record it the way you'll actually make it (${usual}). Keep BLO and post rib as separate swatches; the studio uses whichever matches your <b>Ribbing</b> setting.`;
     return;
   }
   $("swWorkedNote").innerHTML = w === rec
-    ? `✓ Matches how <b>${st}</b> is worked in the patterns (${SW_WORKED_LABEL[rec]}).`
-    : `⚠ <b>${st}</b> is worked <b>${SW_WORKED_LABEL[rec]}</b> in the patterns — a swatch worked ${SW_WORKED_LABEL[w]} can read slightly off. Best to swatch it ${SW_WORKED_LABEL[rec]}.`;
+    ? `✓ Matches how <b>${SW_STITCH_LABEL[st]}</b> is worked in the patterns (${SW_WORKED_LABEL[rec]}).`
+    : `⚠ <b>${SW_STITCH_LABEL[st]}</b> is worked <b>${SW_WORKED_LABEL[rec]}</b> in the patterns — a swatch worked ${SW_WORKED_LABEL[w]} can read slightly off. Best to swatch it ${SW_WORKED_LABEL[rec]}.`;
 }
 
 function updateSwDerived() {
-  const parts = GAUGES.map((k) => {
+  const parts = SW_STITCHES.map((k) => {
     const [s, r, w, h] = SW_GAUGE_IDS[k];
     const g = { sts: parseFloat($(s).value), rows: parseFloat($(r).value), width: parseFloat($(w).value), height: parseFloat($(h).value) };
     const d = densityIn(g, swUnit);
-    return d ? `<b>${k}</b> ${d.st}×${d.row}` : "";
+    return d ? `<b>${SW_STITCH_LABEL[k]}</b> ${d.st}×${d.row}` : "";
   }).filter(Boolean).join(" · ");
   $("swDerived").innerHTML = parts ? `≈ ${parts} <span style="opacity:.7">st×row per ${swUnit}</span>` : "";
 }
@@ -414,7 +497,7 @@ function updateSwDerived() {
 function clearSwatchForm() {
   $("swName").value = "";
   for (const id of SW_YARN) $(id).value = "";
-  for (const k of GAUGES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
+  for (const k of SW_STITCHES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
   swUnit = unit;
   swWorked = { ...SW_REC };
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
@@ -428,7 +511,7 @@ function loadSwatchForm(rec) {
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
   swWorked = { ...SW_REC };
-  for (const k of GAUGES) {
+  for (const k of SW_STITCHES) {
     const g = (rec.gauges && rec.gauges[k]) || {};
     const [s, r, w, h] = SW_GAUGE_IDS[k];
     $(s).value = g.sts > 0 ? g.sts : ""; $(r).value = g.rows > 0 ? g.rows : "";
@@ -440,7 +523,7 @@ function loadSwatchForm(rec) {
 function gatherSwatchRecord() {
   const num = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
   const gauges = {};
-  for (const k of GAUGES) {
+  for (const k of SW_STITCHES) {
     const [s, r, w, h] = SW_GAUGE_IDS[k];
     gauges[k] = { sts: num(s), rows: num(r), width: num(w), height: num(h), worked: swWorked[k] };
   }
@@ -716,8 +799,13 @@ function wire() {
   $("saveSwatchBtn").addEventListener("click", saveCurrentSwatch);
   $("useSwatch").addEventListener("change", (e) => {
     if (!e.target.value) return;
-    applySwatch(e.target.value);
+    const rec = loadSwatches()[e.target.value];
+    const applied = applySwatch(e.target.value);
     e.target.value = "";
+    if (rec) pendingStatus = applied.length
+      ? `loaded ${applied.join(", ")} gauge from “${rec.name}” (other stitches unchanged)`
+      : `“${rec.name}” has no measured gauges yet`;
+    clearTimeout(debounceTimer);   // supersede the debounced generate the select change queued
     generate();
   });
   $("swatches").addEventListener("click", (e) => {
@@ -743,7 +831,7 @@ function wire() {
       const next = btn.dataset.unit;
       if (next === swUnit) return;
       const f = next === "in" ? (v) => v / 2.54 : (v) => v * 2.54;
-      for (const k of GAUGES) { const ids = SW_GAUGE_IDS[k]; for (const id of [ids[2], ids[3]]) { const v = parseFloat($(id).value); if (!isNaN(v)) $(id).value = Math.round(f(v) * 10) / 10; } }
+      for (const k of SW_STITCHES) { const ids = SW_GAUGE_IDS[k]; for (const id of [ids[2], ids[3]]) { const v = parseFloat($(id).value); if (!isNaN(v)) $(id).value = Math.round(f(v) * 10) / 10; } }
       for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === next);
       swUnit = next; updateSwDerived();
     });
