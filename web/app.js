@@ -321,17 +321,31 @@ const SW_GAUGE_IDS = {
 };
 const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
 const SWATCH_INSTR = {
-  rib: `<div class="guide"><p><b>Rib — worked sideways, flat, back-loop only.</b> This is the one part of the set that really is flat: the waistband and cuffs are a long thin strip, turned every row, then seamed short-end to short-end into a ring. So a flat, turned swatch matches the real fabric exactly — no round-vs-flat trickery needed here.</p>
+  rib: {
+    flat: `<div class="guide"><p><b>Rib — the default sideways band (Ribbing: Sideways).</b> Worked flat, back-loop only, then seamed into a ring. This is the one part of the set that really is flat: the waistband and cuffs are a long thin strip, turned every row, then seamed short-end to short-end. So a flat, turned swatch matches the real fabric exactly.</p>
     <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> The <i>back loop</i> is the far one of the two loops on top of a stitch (the front loop is the near one). A <i>turning chain</i> is the ch 1 you make before turning so the edge stays the right height. <i>RS/WS</i> = right side / wrong side (front/back of the work).</p>
-    <p><b>Make it (flat, turned — the correct way for rib):</b></p>
+    <p><b>Make it (flat, turned):</b></p>
     <ul>
       <li>Ch 12–16. Row 1: sc in the 2nd ch from the hook and in each ch across.</li>
       <li>Every row after: ch 1, <b>turn</b>, then <b>sc in the back loop only</b> of each stitch across.</li>
-      <li>Keep going until the strip is ~15 cm / 6 in long. It'll look like columns of raised ridges — that's the rib.</li>
+      <li>Keep going until the strip is ~15 cm / 6 in long. It'll look like ridges — that's the rib.</li>
     </ul>
-    <p><b>Alternative flat styles:</b> some folks like <i>hdc</i> back-loop rib (taller, faster) or a <i>ch-1-turn slip-stitch</i> rib (very stretchy, dense) — either is fine to swatch the same way, turning every row. What matters is that you turn: rib is meant to be reversible, so both faces should match.</p>
-    <p><b>Measure it:</b> rib springs back, so let the strip <b>rest fully relaxed</b> (don't stretch it) before measuring. Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, and enter each with the width &amp; height you actually counted over. Because you count along a flat strip, measuring is easy — just don't pull it taut.</p>
-    <p>Tag this one <b>flat</b> below.</p></div>`,
+    <p><b>Alternative flat styles:</b> some folks like <i>hdc</i> back-loop rib (taller, faster) or a <i>ch-1-turn slip-stitch</i> rib (very stretchy, dense) — either is fine, worked the same way, turning every row. What matters is that you turn: this rib is meant to be reversible, so both faces should match.</p>
+    <p><b>Measure it:</b> rib springs back, so let the strip <b>rest fully relaxed</b> (don't stretch it). Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, and enter each with the width &amp; height you counted over. It's a flat strip, so measuring is easy — just don't pull it taut.</p>
+    <p><b>Two rib constructions, two swatches.</b> This flat one is for the default sideways band. If you switch <b>Ribbing → In the round</b> in the studio, that's a different fabric (post-stitch columns) with a different gauge — keep a <b>separate rib swatch tagged “in the round”</b> for it. Tag this one <b>flat</b>.</p></div>`,
+    round: `<div class="guide"><p><b>Rib — the in-the-round column rib (Ribbing: In the round).</b> Worked in a spiral/round as raised vertical columns using <i>post stitches</i>, never turned. Swatch it in the round so the gauge matches.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> A <i>post stitch</i> is worked around the vertical “post” (the stem) of the stitch below instead of into its top loops. <i>fpdc</i> = front-post double crochet (post pulled toward you), <i>bpdc</i> = back-post (pushed away). Alternating them makes columns stand forward and back — that's the rib. <i>RS</i> = right side, which always faces you in the round.</p>
+    <p><b>Stretchy start — no plain chain.</b> A starting chain is the least-stretchy row and fights the rib, so begin with a <b>foundation single crochet (fsc)</b>, exactly as the pattern does: fsc make a stitch and its own “chain” in one go, so the cast-on edge stretches with the fabric.</p>
+    <p><b>Make it (in the round):</b></p>
+    <ul>
+      <li>Work ~24 <b>fsc</b> (an even number) and join into a ring without twisting.</li>
+      <li>Rnd 1: ch 2, then <b>*fpdc in next st, bpdc in next st; repeat from * around</b>, join.</li>
+      <li>Repeat that round for ~12 rounds. RS always faces out — you never turn.</li>
+      <li><b>Alternative:</b> if a tiny tube is fiddly, work the same rounds <b>flat without turning</b> — cut/slide and rejoin at the start of each round so the RS keeps facing you. Truer than a turned swatch, easier to lay out.</li>
+    </ul>
+    <p><b>Measuring a round rib (a tube won't lie flat):</b> let it relax first — post-stitch rib pulls in hard, so measure it <b>unstretched</b>. Lay the tube flat so it folds double, measure the <b>folded width and double it</b> for the circumference; the <b>stitches around ÷ that circumference</b> is your stitch density. Count the <b>rounds up the height</b>. (For a flat-no-turn strip, just measure sts across and rounds down like any flat swatch.)</p>
+    <p>Tag this one <b>in the round</b> — and keep your sideways-band rib swatch separate.</p></div>`,
+  },
   hdc: `<div class="guide"><p><b>Hdc — worked in the round</b> in the patterns (the skirt and the bag body spiral around and around, right side always facing you). Fabric worked in the round can come out a touch different from flat fabric, so for the truest fit, swatch it in the round too.</p>
     <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> <i>In the round</i> = you never turn; the right side (RS, the front) always faces you. <i>Diameter</i> = straight across a circle through the middle; <i>circumference</i> = the distance all the way around = <b>π × diameter</b> (π ≈ 3.14).</p>
     <p><b>Round methods — pick one:</b></p>
@@ -364,13 +378,24 @@ const SWATCH_INSTR = {
 function swSetStitch(st) {
   curSwStitch = st;
   for (const b of $("swStitchSeg").children) b.classList.toggle("on", b.dataset.st === st);
-  $("swInstr").innerHTML = SWATCH_INSTR[st];
+  renderSwInstr();
   for (const b of $("swWorkedSeg").children) b.classList.toggle("on", b.dataset.w === swWorked[st]);
   updateSwWorkedNote();
 }
 
+function renderSwInstr() {
+  const e = SWATCH_INSTR[curSwStitch];
+  $("swInstr").innerHTML = typeof e === "string" ? e : (e[swWorked[curSwStitch]] || e.flat || e.round);
+}
+
 function updateSwWorkedNote() {
   const st = curSwStitch, w = swWorked[st], rec = SW_REC[st];
+  if (st === "rib") {
+    $("swWorkedNote").innerHTML = w === "flat"
+      ? `Rib swatch for the <b>default sideways band</b> (Ribbing: Sideways) — worked flat, seamed into a ring.`
+      : `Rib swatch for the <b>in-the-round column rib</b> (Ribbing: In the round). The two rib constructions have different gauge, so keep a <b>separate swatch for each</b> and use the one matching your Ribbing setting.`;
+    return;
+  }
   $("swWorkedNote").innerHTML = w === rec
     ? `✓ Matches how <b>${st}</b> is worked in the patterns (${SW_WORKED_LABEL[rec]}).`
     : `⚠ <b>${st}</b> is worked <b>${SW_WORKED_LABEL[rec]}</b> in the patterns — a swatch worked ${SW_WORKED_LABEL[w]} can read slightly off. Best to swatch it ${SW_WORKED_LABEL[rec]}.`;
@@ -710,6 +735,7 @@ function wire() {
   for (const b of $("swWorkedSeg").children) b.addEventListener("click", () => {
     swWorked[curSwStitch] = b.dataset.w;
     for (const x of $("swWorkedSeg").children) x.classList.toggle("on", x.dataset.w === b.dataset.w);
+    renderSwInstr();
     updateSwWorkedNote();
   });
   for (const btn of $("swUnitSeg").children) {
