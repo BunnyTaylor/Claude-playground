@@ -1,10 +1,15 @@
 /*
  * Service worker — makes the app fully offline-capable and installable.
  *
- * The whole app is static, so we cache the app shell on install and serve it
- * cache-first. Bump CACHE when any shell file changes to roll the update out.
+ * Strategy: **network-first** for same-origin requests. When online you always
+ * get the freshly deployed files (so a new release shows up on the next load,
+ * with no cache-busting dance); the cache is only the offline fallback. Bump
+ * CACHE when the precached ASSET list itself changes.
+ *
+ * (The previous version was cache-first, which meant a returning visitor kept
+ * seeing the first files their browser ever cached — updates never showed.)
  */
-const CACHE = "mushroom-v2";
+const CACHE = "mushroom-v3";
 const ASSETS = [
   "./",
   "index.html",
@@ -33,19 +38,22 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
+  // Only manage our own origin; let anything cross-origin go straight to network.
+  if (new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(req).then((hit) =>
-      hit ||
-      fetch(req)
-        .then((resp) => {
-          // cache same-origin successful responses for next time
-          if (resp.ok && new URL(req.url).origin === self.location.origin) {
-            const copy = resp.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return resp;
-        })
-        .catch(() => caches.match("index.html"))
-    )
+    fetch(req)
+      .then((resp) => {
+        // Freshest copy wins — refresh the cache for offline use next time.
+        if (resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return resp;
+      })
+      .catch(() =>
+        // Offline (or the network failed): serve the cached copy, falling back
+        // to the app shell for navigations so the SPA still boots.
+        caches.match(req).then((hit) => hit || caches.match("index.html"))
+      )
   );
 });
