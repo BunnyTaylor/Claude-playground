@@ -37,10 +37,11 @@ There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved on
 that records a gauge with the **yarn it was measured on** (brand, line, fibre,
 weight, hook, colourway) and gives **construction-aware, per-stitch
 instructions** — because a flat back-and-forth swatch doesn't equal
-in-the-round fabric. The rib swatch is worked flat in back-loop-only sc (which
-*is* how the sideways band is made); the hdc/sc swatches are worked in the
-round (or flat-without-turning), and the tool explains the back-loop/front-loop
-trick for mimicking in-the-round BLO flat.
+in-the-round fabric. Rib is tracked as **two separate swatches** — back-loop-only
+(BLO) and post-stitch columns — because they're different fabrics, and each can be
+worked flat *or* in the round; the studio applies whichever matches your Ribbing
+setting. The hdc/sc swatches are worked in the round (or flat-without-turning), and
+the tool explains the back-loop/front-loop trick for mimicking in-the-round BLO flat.
 
 Each saved swatch shows its derived density (`stitches ÷ width` and
 `rows ÷ height`, as st × row per cm/inch). **Use in studio** applies it to a

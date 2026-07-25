@@ -271,9 +271,12 @@
 
         <div class="group-label">Measured gauge <span class="hint" style="font-weight:400">(fill the ones you swatched)</span></div>
         <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
-        <div class="gauge"><div class="gl">Rib</div>
-          <input type="number" id="swRibSts" step="0.5"><input type="number" id="swRibRows" step="0.5">
-          <input type="number" id="swRibW" step="0.1"><input type="number" id="swRibH" step="0.1"></div>
+        <div class="gauge"><div class="gl">BLO rib</div>
+          <input type="number" id="swRibBloSts" step="0.5"><input type="number" id="swRibBloRows" step="0.5">
+          <input type="number" id="swRibBloW" step="0.1"><input type="number" id="swRibBloH" step="0.1"></div>
+        <div class="gauge"><div class="gl">Post rib</div>
+          <input type="number" id="swRibPostSts" step="0.5"><input type="number" id="swRibPostRows" step="0.5">
+          <input type="number" id="swRibPostW" step="0.1"><input type="number" id="swRibPostH" step="0.1"></div>
         <div class="gauge"><div class="gl">Hdc</div>
           <input type="number" id="swHdcSts" step="0.5"><input type="number" id="swHdcRows" step="0.5">
           <input type="number" id="swHdcW" step="0.1"><input type="number" id="swHdcH" step="0.1"></div>
@@ -291,7 +294,8 @@
     <div class="col-out">
       <div class="group-label" style="margin-top:0">How to swatch</div>
       <div class="seg" id="swStitchSeg">
-        <button data-st="rib" class="on">Rib</button>
+        <button data-st="ribBlo" class="on">BLO rib</button>
+        <button data-st="ribPost">Post rib</button>
         <button data-st="hdc">Hdc</button>
         <button data-st="sc">Sc</button>
       </div>
