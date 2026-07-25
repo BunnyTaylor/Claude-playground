@@ -441,6 +441,7 @@ const SWATCH_INSTR = {
       <li>Every row after: ch 1, <b>turn</b>, then <b>sc in the back loop only</b> across.</li>
       <li>Work ~15 cm / 6 in. Because you turn every row, both faces get ridges — the reversible, stretchy rib.</li>
     </ul>
+    <p class="ctag" style="margin:.4em 0"><b>Yes — stay back-loop-only even after you turn.</b> That's what makes it rib: each row's ridge lands on whichever face was toward you, so turning + BLO puts ridges on both sides. (Don't confuse this with the <b>Sc</b> tab, which says to alternate back/front loops when turning — that's a <i>different</i> goal: faking the one-sided fabric of sc worked in the round. The rib wants both faces, so here you never switch.)</p>
     <p><b>Measure it:</b> let the strip <b>rest fully relaxed</b> (rib springs back — don't stretch it). Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, with the width &amp; height you counted over. It's flat, so measuring is easy.</p>
     <p>Tag this <b>flat</b>. BLO rib can also be worked <i>in the round</i> (a spiral BLO band) — if that's what you'll make, switch the tag to <b>In the round</b> for the matching guidance.</p></div>`,
     round: `<div class="guide"><p><b>BLO rib — worked in the round.</b> Same back-loop-only stitch, but spiralled with the RS always facing you (a seamless BLO band). It reads differently from the flat, turned version, so swatch it the way you'll make it.</p>
