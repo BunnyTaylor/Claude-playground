@@ -285,7 +285,12 @@ function renderSwatches() {
   const ids = Object.keys(sw).sort((a, b) => sw[b].savedAt - sw[a].savedAt);
   const cards = ids.length ? ids.map((id) => {
     const s = sw[id], u = s.unit || "cm";
-    const dens = GAUGES.map((k) => { const d = densityIn(s.gauges[k], u); return `<span class="sd"><b>${k}</b>${d ? d.st + " × " + d.row : "—"}</span>`; }).join("");
+    const dens = GAUGES.map((k) => {
+      const d = densityIn(s.gauges[k], u);
+      const w = (s.gauges[k] && s.gauges[k].worked) || SW_REC[k];
+      const tag = d ? ` <em title="worked ${SW_WORKED_LABEL[w]}" style="font-style:normal;color:var(--ink-soft)">${w === "round" ? "↻" : "⇄"}</em>` : "";
+      return `<span class="sd"><b>${k}</b>${d ? d.st + " × " + d.row : "—"}${tag}</span>`;
+    }).join("");
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
@@ -306,6 +311,9 @@ function renderSwatches() {
 /* ---------- swatch tool (dedicated tab) ---------- */
 
 let swUnit = "cm", swEditId = null, curSwStitch = "rib";
+const SW_REC = { rib: "flat", hdc: "round", sc: "round" };   // how each stitch is worked in the patterns
+const SW_WORKED_LABEL = { flat: "flat", round: "in the round" };
+let swWorked = { ...SW_REC };
 const SW_GAUGE_IDS = {
   rib: ["swRibSts", "swRibRows", "swRibW", "swRibH"],
   hdc: ["swHdcSts", "swHdcRows", "swHdcW", "swHdcH"],
@@ -313,30 +321,59 @@ const SW_GAUGE_IDS = {
 };
 const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
 const SWATCH_INSTR = {
-  rib: `<div class="guide"><p><b>Rib — worked sideways, flat, back-loop only.</b> The waistband and cuffs are a flat strip you seam into a ring, so swatch them exactly that way — this is the one part where flat is right.</p>
+  rib: `<div class="guide"><p><b>Rib — worked sideways, flat, back-loop only.</b> This is the one part of the set that really is flat: the waistband and cuffs are a long thin strip, turned every row, then seamed short-end to short-end into a ring. So a flat, turned swatch matches the real fabric exactly — no round-vs-flat trickery needed here.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> The <i>back loop</i> is the far one of the two loops on top of a stitch (the front loop is the near one). A <i>turning chain</i> is the ch 1 you make before turning so the edge stays the right height. <i>RS/WS</i> = right side / wrong side (front/back of the work).</p>
+    <p><b>Make it (flat, turned — the correct way for rib):</b></p>
     <ul>
-      <li>Ch 12–16. Row 1: sc in 2nd ch from hook and each ch across.</li>
-      <li>Every row after: ch 1, turn, <b>sc in the back loop only</b> across.</li>
-      <li>Work ~15 cm, then let it rest — rib springs back, so measure it <b>relaxed</b>.</li>
-      <li>Count <b>sts across the foundation</b> (the short edge) and <b>ridged rows along the length</b>; enter those with the width &amp; height you counted over.</li>
+      <li>Ch 12–16. Row 1: sc in the 2nd ch from the hook and in each ch across.</li>
+      <li>Every row after: ch 1, <b>turn</b>, then <b>sc in the back loop only</b> of each stitch across.</li>
+      <li>Keep going until the strip is ~15 cm / 6 in long. It'll look like columns of raised ridges — that's the rib.</li>
     </ul>
-    <p>Back-loop rows leave ridges on both faces — the stretchy reversible rib you'll use. No need to alternate loops here.</p></div>`,
-  hdc: `<div class="guide"><p><b>Hdc — worked in the round</b> (the skirt and bag body). Gauge in the round differs from flat, so swatch it in the round for the truest fit.</p>
+    <p><b>Alternative flat styles:</b> some folks like <i>hdc</i> back-loop rib (taller, faster) or a <i>ch-1-turn slip-stitch</i> rib (very stretchy, dense) — either is fine to swatch the same way, turning every row. What matters is that you turn: rib is meant to be reversible, so both faces should match.</p>
+    <p><b>Measure it:</b> rib springs back, so let the strip <b>rest fully relaxed</b> (don't stretch it) before measuring. Count the <b>stitches across the short foundation edge</b> and the <b>ridged rows along the length</b>, and enter each with the width &amp; height you actually counted over. Because you count along a flat strip, measuring is easy — just don't pull it taut.</p>
+    <p>Tag this one <b>flat</b> below.</p></div>`,
+  hdc: `<div class="guide"><p><b>Hdc — worked in the round</b> in the patterns (the skirt and the bag body spiral around and around, right side always facing you). Fabric worked in the round can come out a touch different from flat fabric, so for the truest fit, swatch it in the round too.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> <i>In the round</i> = you never turn; the right side (RS, the front) always faces you. <i>Diameter</i> = straight across a circle through the middle; <i>circumference</i> = the distance all the way around = <b>π × diameter</b> (π ≈ 3.14).</p>
+    <p><b>Round methods — pick one:</b></p>
     <ul>
-      <li><b>Best:</b> work a short tube or a flat disc in hdc with the right side always facing, and measure a calm area away from the edges.</li>
-      <li><b>Or</b> work flat <b>without turning</b> — at the end of each row cut/slide the loop and rejoin at the start so the RS always faces you.</li>
-      <li>A turned, back-and-forth flat swatch reads a little differently from the finished round fabric.</li>
-      <li>Rest it, then count sts across a width and rows down a height.</li>
-    </ul></div>`,
-  sc: `<div class="guide"><p><b>Sc — worked in the round</b> (the flounce, sleeves and hat). Same as hdc: swatch in the round (tube/disc) or flat-without-turning, keeping the <b>right side always facing</b>.</p>
-    <p><b>Why flat ≠ round:</b> in the round you always work into the back loop on the RS, giving a consistent one-sided ridge. To mimic that flat you'd have to work <b>back loops on RS rows and front loops on WS rows</b> — otherwise turning flips which loop faces you and the ridges don't line up. (Our rib sidesteps this by being worked sideways.)</p>
-    <p>Rest it, then count sts across a width and rows down a height.</p></div>`,
+      <li><b>Small tube (closest to the real thing):</b> ch ~30, join into a ring, and spiral hdc round and round for ~12 rounds. RS always faces out.</li>
+      <li><b>Flat disc / hat-top:</b> start in a magic ring and increase each round into a flat circle. Truly in-the-round, but the increases crowd your counting — measure out in a calm mid-band, not near the centre or the edge.</li>
+      <li><b>Flat, but without turning:</b> work a row, then <b>don't turn</b> — cut the yarn (or slide a long loop) and rejoin at the <i>start</i> of the row so the RS faces you again for every row. This fakes in-the-round on a flat rectangle that's easy to measure. A little fiddly, but the numbers are honest.</li>
+    </ul>
+    <p><b>Avoid for gauge:</b> a normal turned, back-and-forth flat swatch. It's the fastest to make, but it reads slightly differently from the round fabric — okay in a pinch, just tag it <b>flat</b> so you know.</p>
+    <p><b>Measuring a round swatch (a circle won't lie flat!):</b></p>
+    <ul>
+      <li><b>Tube:</b> lay it flat so it folds double, measure the folded width, and <b>double it</b> — that's the circumference. Divide your stitch count for the round by that circumference to get stitches per cm/inch. Rounds are easy: count the ridges up the height.</li>
+      <li><b>Flat disc:</b> you can't press a dome flat without distorting it, so measure the <b>diameter</b> across the middle, then circumference = <b>π × diameter</b>; the stitches in that round ÷ that circumference is your st density. Or just count stitches across a <b>2 in / 5 cm span you lay a ruler on</b> in a flat area and divide by that span.</li>
+      <li><b>Flat-no-turn rectangle:</b> measure it like any flat swatch — count sts across a width and rows down a height.</li>
+    </ul>
+    <p>Rest it first, then tag it <b>in the round</b> (or <b>flat</b> if you took the shortcut).</p></div>`,
+  sc: `<div class="guide"><p><b>Sc — worked in the round</b> in the patterns (the flounce, the sleeves and the hat all spiral, RS facing). Swatch it in the round the same way as hdc.</p>
+    <p class="ctag" style="margin:.4em 0"><b>New to the words?</b> Each stitch has two loops on top — a <i>back loop</i> (far) and <i>front loop</i> (near). <i>RS/WS</i> = right side / wrong side. In the round the RS always faces you; flat, it flips every time you turn.</p>
+    <p><b>Round methods — pick one:</b></p>
+    <ul>
+      <li><b>Small tube:</b> ch ~30, join, and spiral sc round and round ~15 rounds — RS always out. Closest to the real fabric.</li>
+      <li><b>Flat disc:</b> magic ring, increase into a circle; measure a calm mid-band, away from the centre and edge.</li>
+      <li><b>Flat, without turning:</b> work a row, don't turn, cut/slide and rejoin at the start each row so RS always faces you — an easy-to-measure rectangle that behaves like the round.</li>
+    </ul>
+    <p><b>Why flat ≠ round (the important bit):</b> in the round you always work into the <b>back loop on the RS</b>, so every ridge lands on the same face — a consistent one-sided texture. If you swatch flat and turn, half your rows are worked from the WS, which flips which loop faces you and the ridges stop lining up. To mimic in-the-round back-loop fabric on a flat, turned swatch, work <b>back loops on RS rows and front loops on WS rows</b>. (Our rib avoids all this by being worked sideways.)</p>
+    <p><b>Measuring a round swatch (it won't lie flat):</b> for a <b>tube</b>, measure the folded-flat width and double it for the circumference; for a <b>flat disc</b>, measure the <b>diameter</b> and use circumference = <b>π × diameter</b>, or count stitches across a <b>2 in / 5 cm</b> span laid with a ruler in a flat area. Then stitches ÷ that distance = your density. Count rows/rounds up the height as usual.</p>
+    <p>Rest it, then tag it <b>in the round</b> (or <b>flat</b> if you took the shortcut).</p></div>`,
 };
 
 function swSetStitch(st) {
   curSwStitch = st;
   for (const b of $("swStitchSeg").children) b.classList.toggle("on", b.dataset.st === st);
   $("swInstr").innerHTML = SWATCH_INSTR[st];
+  for (const b of $("swWorkedSeg").children) b.classList.toggle("on", b.dataset.w === swWorked[st]);
+  updateSwWorkedNote();
+}
+
+function updateSwWorkedNote() {
+  const st = curSwStitch, w = swWorked[st], rec = SW_REC[st];
+  $("swWorkedNote").innerHTML = w === rec
+    ? `✓ Matches how <b>${st}</b> is worked in the patterns (${SW_WORKED_LABEL[rec]}).`
+    : `⚠ <b>${st}</b> is worked <b>${SW_WORKED_LABEL[rec]}</b> in the patterns — a swatch worked ${SW_WORKED_LABEL[w]} can read slightly off. Best to swatch it ${SW_WORKED_LABEL[rec]}.`;
 }
 
 function updateSwDerived() {
@@ -354,6 +391,7 @@ function clearSwatchForm() {
   for (const id of SW_YARN) $(id).value = "";
   for (const k of GAUGES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
   swUnit = unit;
+  swWorked = { ...SW_REC };
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
 }
 
@@ -364,11 +402,13 @@ function loadSwatchForm(rec) {
   $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || ""; $("swColorway").value = y.colorway || "";
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
+  swWorked = { ...SW_REC };
   for (const k of GAUGES) {
     const g = (rec.gauges && rec.gauges[k]) || {};
     const [s, r, w, h] = SW_GAUGE_IDS[k];
     $(s).value = g.sts > 0 ? g.sts : ""; $(r).value = g.rows > 0 ? g.rows : "";
     $(w).value = g.width > 0 ? g.width : ""; $(h).value = g.height > 0 ? g.height : "";
+    if (g.worked) swWorked[k] = g.worked;
   }
 }
 
@@ -377,7 +417,7 @@ function gatherSwatchRecord() {
   const gauges = {};
   for (const k of GAUGES) {
     const [s, r, w, h] = SW_GAUGE_IDS[k];
-    gauges[k] = { sts: num(s), rows: num(r), width: num(w), height: num(h) };
+    gauges[k] = { sts: num(s), rows: num(r), width: num(w), height: num(h), worked: swWorked[k] };
   }
   return {
     name: ($("swName").value || "").trim(),
@@ -667,6 +707,11 @@ function wire() {
 
   // swatch tool
   for (const b of $("swStitchSeg").children) b.addEventListener("click", () => swSetStitch(b.dataset.st));
+  for (const b of $("swWorkedSeg").children) b.addEventListener("click", () => {
+    swWorked[curSwStitch] = b.dataset.w;
+    for (const x of $("swWorkedSeg").children) x.classList.toggle("on", x.dataset.w === b.dataset.w);
+    updateSwWorkedNote();
+  });
   for (const btn of $("swUnitSeg").children) {
     btn.addEventListener("click", () => {
       const next = btn.dataset.unit;
