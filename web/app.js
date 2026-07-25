@@ -346,19 +346,69 @@ function renderSwatches() {
     }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no gauges measured</span>`;
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
+    const colour = (y.colorway || "").trim();
+    const notes = (s.notes || "").trim();
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
       ${yline ? `<div class="swy">${esc(yline)}</div>` : ""}
+      ${colour ? `<div class="swy" style="opacity:.7">Colour: ${esc(colour)}</div>` : ""}
       <div class="swd">${dens}</div>
       <div class="swm">st × row per ${u}, from your sts÷width &amp; rows÷height</div>
-      <div class="btnrow" style="margin-top:0"><button class="btn ghost sm" data-usesw="${id}">Use in studio →</button><button class="btn ghost sm" data-editsw="${id}">Edit</button></div></div>`;
+      ${notes ? `<div class="swm" style="opacity:.85;font-style:italic">${esc(notes)}</div>` : ""}
+      <div class="btnrow" style="margin-top:0"><button class="btn ghost sm" data-usesw="${id}">Use in studio →</button><button class="btn ghost sm" data-editsw="${id}">Edit</button><button class="btn ghost sm" data-dupsw="${id}">Duplicate</button></div></div>`;
   }).join("") : `<div class="empty">No swatches yet — make one in the swatch tool, or hit “Save swatch” in the studio.</div>`;
+  const tools = ids.length ? `<button class="btn ghost sm" id="swExportBtn">⬆ Export</button><button class="btn ghost sm" id="swImportBtn">⬇ Import</button>` : `<button class="btn ghost sm" id="swImportBtn">⬇ Import</button>`;
   $("swatches").innerHTML = `<div class="homeproj">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <h2 style="margin:0">Gauge swatches</h2>
-      <button class="btn sm" id="newSwatchBtn">＋ New swatch</button>
+      <div class="btnrow" style="margin:0">${tools}<button class="btn sm" id="newSwatchBtn">＋ New swatch</button></div>
     </div>
     <p class="ctag" style="margin:6px 0 10px">Save the gauges you measure — with the yarn you used — and reuse them across patterns. Density is stitches ÷ the distance you counted.</p>
-    ${guide}<div class="swlist">${cards}</div></div>`;
+    ${guide}<div class="swlist">${cards}</div></div>
+    <input type="file" id="swImportFile" accept="application/json" hidden>`;
+}
+
+function duplicateSwatch(id) {
+  const s = loadSwatches();
+  const src = s[id];
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.name = (src.name || "Swatch") + " (copy)";
+  copy.savedAt = Date.now();
+  const newId = "s" + Date.now().toString(36);
+  s[newId] = copy;
+  saveSwatches(s);
+  populateSwatchSelect();
+  openSwatch(newId);   // open the copy ready to tweak (e.g. a new colourway or hook)
+}
+
+function exportSwatches() {
+  const bundle = { kind: "mushroom-swatches", version: 1, exportedAt: new Date().toISOString(), swatches: loadSwatches() };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "mushroom-swatches.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importSwatchFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const b = JSON.parse(reader.result);
+      const incoming = b.swatches || (b.kind ? {} : b);   // accept a raw swatch map too
+      for (const k in incoming) migrateSwatchRec(incoming[k]);
+      saveSwatches({ ...loadSwatches(), ...incoming });
+      renderSwatches();
+      populateSwatchSelect();
+    } catch (err) {
+      alert("Swatch import failed: " + err.message);
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
 }
 
 /* ---------- swatch tool (dedicated tab) ---------- */
@@ -496,6 +546,7 @@ function updateSwDerived() {
 
 function clearSwatchForm() {
   $("swName").value = "";
+  $("swNotes").value = "";
   for (const id of SW_YARN) $(id).value = "";
   for (const k of SW_STITCHES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
   swUnit = unit;
@@ -508,6 +559,7 @@ function loadSwatchForm(rec) {
   const y = rec.yarn || {};
   $("swBrand").value = y.brand || ""; $("swLine").value = y.line || ""; $("swFiber").value = y.fiber || "";
   $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || ""; $("swColorway").value = y.colorway || "";
+  $("swNotes").value = rec.notes || "";
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
   swWorked = { ...SW_REC };
@@ -531,6 +583,7 @@ function gatherSwatchRecord() {
     name: ($("swName").value || "").trim(),
     unit: swUnit,
     yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorway: $("swColorway").value.trim() },
+    notes: ($("swNotes").value || "").trim(),
     gauges,
   };
 }
@@ -812,10 +865,17 @@ function wire() {
     const use = e.target.closest("[data-usesw]");
     const del = e.target.closest("[data-delsw]");
     const edit = e.target.closest("[data-editsw]");
+    const dup = e.target.closest("[data-dupsw]");
     if (e.target.closest("#newSwatchBtn")) openSwatch();
+    else if (e.target.closest("#swExportBtn")) exportSwatches();
+    else if (e.target.closest("#swImportBtn")) $("swImportFile").click();
     else if (edit) openSwatch(edit.dataset.editsw);
+    else if (dup) duplicateSwatch(dup.dataset.dupsw);
     else if (use) { applySwatch(use.dataset.usesw); openStudio(curColl.id, curGen.id); }
     else if (del) { const s = loadSwatches(); delete s[del.dataset.delsw]; saveSwatches(s); renderSwatches(); populateSwatchSelect(); }
+  });
+  $("swatches").addEventListener("change", (e) => {
+    if (e.target.id === "swImportFile") importSwatchFile(e);
   });
 
   // swatch tool
