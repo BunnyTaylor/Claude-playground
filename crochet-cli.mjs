@@ -31,7 +31,7 @@ function buildOptions() {
   const o = {
     config: { type: "string" }, unit: { type: "string" }, terms: { type: "string" },
     sleeveless: { type: "boolean" }, strapless: { type: "boolean" },
-    "dot-sizes": { type: "string" }, piece: { type: "string" }, yarn: { type: "boolean" },
+    "dot-sizes": { type: "string" }, "rib-style": { type: "string" }, piece: { type: "string" }, yarn: { type: "boolean" },
     json: { type: "boolean" }, svg: { type: "string" }, schematic: { type: "boolean" },
     "dump-config": { type: "string" }, "no-chart": { type: "boolean" }, "no-color": { type: "boolean" },
     help: { type: "boolean", short: "h" },
@@ -69,6 +69,7 @@ function resolveInput(v) {
   for (const [f, k] of Object.entries(STYLE)) if (v[f] != null) inp.style[k] = parseFloat(v[f]);
   for (const [f, k] of Object.entries(COLORS)) if (v[f] != null) inp.colors[k] = v[f];
   for (const st of GAUGES) for (const [f, k] of Object.entries(GFIELDS)) if (v[`${st}-${f}`] != null) inp.gauges[st][k] = parseFloat(v[`${st}-${f}`]);
+  if (v["rib-style"]) inp.style.ribStyle = v["rib-style"];
   if (v["dot-sizes"]) {
     const sizes = v["dot-sizes"].split(",").map((x) => parseFloat(x.trim())).filter((n) => !isNaN(n));
     if (sizes.length) { inp.style.dotDia = sizes[0]; if (sizes.length > 1) inp.style.dotSizes = sizes; }

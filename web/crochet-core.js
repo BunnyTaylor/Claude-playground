@@ -81,7 +81,8 @@ var CrochetCore = (function () {
     var inc = to - frm, iv2 = Math.floor(frm / inc);
     if (iv2 < 1) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
     var tail2 = frm - iv2 * inc;
-    return "*" + stitch + " in each of next " + (iv2 - 1) + " sts, 2 " + stitch +
+    var lead2 = (iv2 - 1) > 0 ? stitch + " in each of next " + (iv2 - 1) + " sts, " : "";
+    return "*" + lead2 + "2 " + stitch +
       " in next st; rep from * " + inc + " times" +
       (tail2 > 0 ? ", " + stitch + " in each of last " + tail2 + " sts" : "");
   }
@@ -120,7 +121,7 @@ var CrochetCore = (function () {
       sc: { sts: 16, rows: 18, width: 10, height: 10 }
     },
     body: { bust: 92, waist: 74, upperBust: 84, hip: 98, upperArm: 30, wrist: 16, skirtLen: 45, sleeveLen: 50 },
-    style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2 },
+    style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, ribStyle: "sideways" },
     colors: { cap: "cap colour", spot: "spot colour", body: "body colour" }
   };
   var defaultInput = function () { return JSON.parse(JSON.stringify(DEFAULT_INPUT)); };
@@ -145,28 +146,50 @@ var CrochetCore = (function () {
 
     // 1. waistband
     var wbCirc = waist + S.waistEase;
-    var wbSts = even(jsround(wbCirc * rib.st));
+    var ribStyle = S.ribStyle === "post" ? "post" : "sideways";   // default: sideways back-loop rib
     var wbRnds = Math.max(4, jsround(12 * rib.row));
-    pieces.push({
-      id: "waistband", title: "Fitted waistband", stitch: "in the round · fpdc/bpdc rib",
-      counts: { sts: wbSts, rounds: wbRnds, circumference: wbCirc },
-      progress: { total: wbRnds, start: wbSts, end: wbSts, incRounds: [] },
-      steps: [
-        ["Foundation", "Ch " + wbSts + ". Taking care not to twist, join with sl st to form a ring."],
-        ["Rnd 1", "Ch 1, sc in each ch around, join. (" + wbSts + " sc)"],
-        ["Rnd 2", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. (" + wbSts + " sts)"],
-        ["Rnds 3–" + wbRnds, "Rep Rnd 2."],
-        ["Finish", "Fasten off. Test it stretches over your hips before continuing."]
-      ]
-    });
+    var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
+    var wbRowsAround = even(jsround(wbCirc * rib.row));                    // rows around = edge pickup count (sideways)
+    var wbSts = even(jsround(wbCirc * rib.st));                           // stitches around (in-the-round)
+    var wbEdge, wbPiece;
+    if (ribStyle === "sideways") {
+      wbEdge = wbRowsAround;
+      wbPiece = {
+        id: "waistband", title: "Fitted waistband", stitch: "sideways · back-loop rib, seamed",
+        counts: { sts: wbRowsAround, heightSts: wbHeightSts, rowsAround: wbRowsAround, circumference: wbCirc },
+        progress: { total: wbRowsAround, start: wbHeightSts, end: wbHeightSts, incRounds: [] },
+        steps: [
+          ["Foundation", "Ch " + wbHeightSts + " — this is the band's height, not its circumference, so there's no starting chain around your body to fight the stretch."],
+          ["Rib rows", "Row 1: sc in 2nd ch from hook and each ch (" + wbHeightSts + " sc). Every row after: ch 1, turn, sc in back loop only across. The back-loop ridges make the rib."],
+          ["Length", "Work " + wbRowsAround + " rows in all, checking against your waist — the strip should reach " + H(wbCirc) + " gently stretched. Add or remove rows to fit."],
+          ["Seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it pulls over your hips before continuing."],
+          ["Finish", "Fasten off. The skirt is worked into the row-ends along one long edge (next piece)."]
+        ]
+      };
+    } else {
+      wbEdge = wbSts;
+      wbPiece = {
+        id: "waistband", title: "Fitted waistband", stitch: "in the round · fpdc/bpdc rib",
+        counts: { sts: wbSts, rounds: wbRnds, circumference: wbCirc },
+        progress: { total: wbRnds, start: wbSts, end: wbSts, incRounds: [] },
+        steps: [
+          ["Foundation (stretchy start)", "Work " + wbSts + " foundation sc (fsc) and join into a ring, not twisting — a foundation row stretches with the rib; a starting chain won't clear your hips."],
+          ["Rnd 1", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. (" + wbSts + " sts)"],
+          ["Rnds 2–" + wbRnds, "Rep Rnd 1."],
+          ["Finish", "Fasten off. Test it stretches over your hips before crocheting the skirt."]
+        ]
+      };
+    }
+    pieces.push(wbPiece);
 
     // 2. skirt
     var hemCirc = wbCirc * S.fullness;
     var hemSts = jsround(hemCirc * hdc.st);
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
     var skStart = jsround(waist * hdc.st);
-    var skJoin = evenAdjust(wbSts, skStart, "hdc");
+    var skJoin = evenAdjust(wbEdge, skStart, "hdc");
     var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1);
+    var wbEdgeLabel = ribStyle === "sideways" ? wbEdge + " row-ends" : wbEdge + " rib sts";
     if (hemSts <= skStart) warnings.push("Hem is no wider than the waist — raise fullness or check hdc gauge.");
     pieces.push({
       id: "skirt", title: "A-line skirt", stitch: "in the round, downward · hdc",
@@ -174,7 +197,7 @@ var CrochetCore = (function () {
       progress: { total: skRnds, start: skStart, end: skPlan.finalCount,
         incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }) },
       steps: [
-        ["Set-up", "Join to the lower edge of the waistband. Ch 2, " + skJoin + ", join. (" + wbSts + " rib sts → " + skStart + " hdc)"],
+        ["Set-up", "Join to the lower edge of the waistband. Ch 2, " + skJoin + ", join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
         ["Plain rnds", "Ch 2, hdc in each st around, join. Rep for every round not listed."]
       ].concat(skPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
         .concat([["Finish", "Work plain to Rnd " + skRnds + ". Fasten off. (" + skPlan.finalCount + " hdc)"]])
@@ -245,21 +268,38 @@ var CrochetCore = (function () {
     }
     pieces.push(spotsPiece);
 
-    // 5. sleeves
+    // 5. sleeves — the cuff follows the same ribStyle as the waistband, then the
+    // body is worked in the round identically from scCuff onward.
     var cuffSts = even(jsround((wrist + 2) * rib.st));
     var scCuff = jsround((wrist + 2) * sc.st);
     var balSts = jsround(upperArm * S.balloon * sc.st);
     var topSts = jsround((upperArm + 4) * sc.st);
     var cuffRnds = Math.max(3, jsround(5 * rib.row));
-    var slRnds = Math.max(cuffRnds + 6, cuffRnds + jsround((sleeveLen - 5) * sc.row));
-    var sleeveSteps = [
-      ["Foundation", "In " + C.cap + ", ch " + cuffSts + ". Join to form a ring."],
-      ["Rnd 1", "Ch 1, sc in each ch around, join. (" + cuffSts + " sc)"],
-      ["Cuff rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + cuffRnds + "."],
-      ["Rnd " + (cuffRnds + 1), "Ch 1, " + evenAdjust(cuffSts, scCuff, "sc") + ", join. (" + cuffSts + " rib sts → " + scCuff + " sc)"]
-    ];
-    var cur = scCuff, rnd = cuffRnds + 1;
-    var sleeveInc = [{ rnd: cuffRnds + 1, count: scCuff }];
+    var cuffHeightSts = Math.max(6, jsround(cuffRnds * rib.st / rib.row));
+    var cuffRowsAround = even(jsround((wrist + 2) * rib.row));
+    var bodyRnds = Math.max(6, jsround((sleeveLen - 5) * sc.row));
+    var sleeveSteps, cuffEndRnd, cuffStartCount, cuffLabel;
+    if (ribStyle === "sideways") {
+      cuffEndRnd = 1;
+      cuffStartCount = scCuff;
+      cuffLabel = cuffRowsAround;
+      sleeveSteps = [
+        ["Cuff (sideways rib)", "In " + C.cap + ", ch " + cuffHeightSts + " (the cuff height). Row 1: sc in 2nd ch and each ch; then ch 1, turn, sc in back loop only across. Work " + cuffRowsAround + " rows, then seam into a ring — back-loop rows stretch to pass over your hand."],
+        ["Rnd 1", "Ch 1, work " + scCuff + " sc evenly around the cuff's edge, join. (" + scCuff + " sc)"]
+      ];
+    } else {
+      cuffEndRnd = cuffRnds + 1;
+      cuffStartCount = cuffSts;
+      cuffLabel = cuffSts;
+      sleeveSteps = [
+        ["Foundation (stretchy start)", "In " + C.cap + ", work " + cuffSts + " foundation sc (fsc) and join into a ring — the foundation stretches with the rib so the cuff clears your hand."],
+        ["Cuff rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + cuffRnds + ". (" + cuffSts + " sts)"],
+        ["Rnd " + (cuffRnds + 1), "Ch 1, " + evenAdjust(cuffSts, scCuff, "sc") + ", join. (" + cuffSts + " rib sts → " + scCuff + " sc)"]
+      ];
+    }
+    var slRnds = cuffEndRnd + bodyRnds;
+    var cur = scCuff, rnd = cuffEndRnd;
+    var sleeveInc = [{ rnd: cuffEndRnd, count: scCuff }];
     if (balSts > scCuff * 2) {
       rnd += 1;
       sleeveSteps.push(["Rnd " + rnd, "Ch 1, 2 sc in each st around, join. (" + (scCuff * 2) + " sc)"]);
@@ -283,9 +323,10 @@ var CrochetCore = (function () {
     sleeveSteps.push(["Finish", "Fasten off. Thread elastic through the final round."]);
     if (!S.sleeveless) {
       pieces.push({
-        id: "sleeves", title: "Lantern sleeves ×2", stitch: "in the round, cuff up · rib + sc",
-        counts: { cuff: cuffSts, balloon: balSts, top: topSts, rounds: slRnds },
-        progress: { total: slRnds, start: cuffSts, end: sleeveEnd, incRounds: sleeveInc },
+        id: "sleeves", title: "Lantern sleeves ×2",
+        stitch: ribStyle === "sideways" ? "sideways cuff + sc body" : "in the round, cuff up · rib + sc",
+        counts: { cuff: cuffLabel, balloon: balSts, top: topSts, rounds: slRnds },
+        progress: { total: slRnds, start: cuffStartCount, end: sleeveEnd, incRounds: sleeveInc },
         steps: sleeveSteps, makeCount: 2
       });
     }

@@ -285,13 +285,55 @@ test("default still has sleeves and straps", () => {
 });
 
 test("UK terms convert stitch names without corrupting compounds", () => {
-  const res = computePattern(DEFAULT_INPUT);
+  // use post-stitch rib so fpdc/bpdc are present to exercise the compound map
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.ribStyle = "post";
+  const res = computePattern(inp);
   const uk = convertTerms(res, "UK");
   const joined = uk.pieces.flatMap((p) => p.steps.map((s) => s[1])).join(" ");
-  assert.ok(joined.includes("htr"));
-  assert.ok(joined.includes("fptr"));
+  assert.ok(joined.includes("htr"));   // hdc -> htr
+  assert.ok(joined.includes("fptr"));  // fpdc -> fptr (compound, atomically)
   assert.ok(!joined.includes("hdc") && !joined.includes("sc2tog"));
   assert.notEqual(res, uk);
+});
+
+/* ---------------- ribbing construction ---------------- */
+
+test("default ribbing is sideways (back-loop), seamed into a ring", () => {
+  const wb = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "waistband");
+  assert.match(wb.stitch, /sideways/);
+  // sized by rows-around (~ waistCirc x row gauge), not stitches-around
+  assert.equal(wb.counts.rowsAround, wb.counts.sts);
+  assert.ok(wb.counts.heightSts >= 6);
+  const joined = wb.steps.map((s) => s[1]).join(" ");
+  assert.match(joined, /back loop only/);
+  assert.ok(!/fpdc/.test(joined));  // no post-stitch rib in sideways mode
+});
+
+test("post rib option restores in-the-round fpdc/bpdc with the same skirt top", () => {
+  const inp = structuredClone(DEFAULT_INPUT);
+  inp.style.ribStyle = "post";
+  const res = computePattern(inp);
+  const wb = res.pieces.find((p) => p.id === "waistband");
+  assert.match(wb.stitch, /in the round/);
+  assert.ok(wb.counts.sts % 2 === 0);
+  assert.match(wb.steps.map((s) => s[1]).join(" "), /fpdc/);
+  // the skirt still lands at the true waist regardless of rib style
+  const sideways = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "skirt");
+  const post = res.pieces.find((p) => p.id === "skirt");
+  assert.equal(sideways.counts.start, post.counts.start);
+});
+
+test("both rib modes keep every piece's progress end exact", () => {
+  for (const style of ["sideways", "post"]) {
+    const inp = structuredClone(DEFAULT_INPUT);
+    inp.style.ribStyle = style;
+    for (const p of computePattern(inp).pieces) {
+      if (!p.progress) continue;
+      assert.equal(walkProgressEnd(p), p.progress.end, `${style}/${p.id}`);
+      for (const it of p.progress.incRounds) assert.ok(it.rnd >= 1 && it.rnd <= p.progress.total, `${style}/${p.id}`);
+    }
+  }
 });
 
 test("US terms is a no-op", () => {

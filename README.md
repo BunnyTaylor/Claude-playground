@@ -31,6 +31,23 @@ Dockerfile              self-host on any Docker host (nginx static)
 .github/workflows/      auto-deploy to GitHub Pages on push
 ```
 
+## Gauge swatches
+
+There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved one)
+that records a gauge with the **yarn it was measured on** (brand, line, fibre,
+weight, hook, colourway) and gives **construction-aware, per-stitch
+instructions** — because a flat back-and-forth swatch doesn't equal
+in-the-round fabric. The rib swatch is worked flat in back-loop-only sc (which
+*is* how the sideways band is made); the hdc/sc swatches are worked in the
+round (or flat-without-turning), and the tool explains the back-loop/front-loop
+trick for mimicking in-the-round BLO flat.
+
+Each saved swatch shows its derived density (`stitches ÷ width` and
+`rows ÷ height`, as st × row per cm/inch). **Use in studio** applies it to a
+project (only the gauges you actually measured). You can also quick-**Save
+swatch** straight from the studio gauge panel, which shows the current gauge's
+derived density live. All of it stays in the browser.
+
 ## Adding a pattern generator
 
 The app is data-driven, so a new pattern is three steps:
@@ -127,9 +144,22 @@ through any refactor:
 - skirt-top circumference lands within 1.5 cm of the true waist
 - cm and inch inputs for the same body produce the same pattern (±2 sts)
 
-Known-good default output: waistband 124 sts × 11 rnds; skirt 104 → 193 hdc,
-50 rnds; flounce 134 → 241 sc, 29 rnds; spots 4 × 5, repeat 9 × 10; sleeves
-32 rib → 67 balloon. If a refactor changes these, something broke.
+Known-good default output: skirt 104 → 193 hdc, 50 rnds; flounce 134 → 241 sc,
+29 rnds; spots 4 × 5, repeat 9 × 10; sleeves → 67 balloon. The waistband
+depends on the ribbing style — **sideways** (default) is 62 rows around × 22
+tall; the **in-the-round** option is 124 sts × 11 rnds. If a refactor changes
+these, something broke.
+
+### Ribbing (waistband & cuffs)
+
+A starting chain is the least-stretchy part of a piece and fights the stretch
+ribbing is there to give. So the default is **sideways back-loop-only rib** —
+worked as a flat strip with the rows running around the body and seamed into a
+ring (the crochet equivalent of knit ribbing, and the stretchiest option). The
+`style.ribStyle` option (`"sideways"` default, or `"post"` for in-the-round
+fpdc/bpdc rib off a chainless foundation) is exposed in the UI (**Ribbing**
+selector) and the CLI (`--rib-style`). In sideways mode the band is sized by
+*rows around*, and the skirt/sleeve is worked into the row-ends.
 
 ## The engine
 

@@ -27,6 +27,7 @@
 <!-- ============ HOME ============ -->
 <div class="wrap" id="homeView">
   <div id="collections"></div>
+  <div id="swatches"></div>
   <div id="homeProjects"></div>
   <p class="foot">Everything runs in your browser and saves to this device — no account, nothing uploaded. More pattern collections coming.</p>
 </div>
@@ -127,6 +128,12 @@
           <input type="number" id="scSts" value="16" step="0.5"><input type="number" id="scRows" value="18" step="0.5">
           <input type="number" id="scW" value="10" step="0.1"><input type="number" id="scH" value="10" step="0.1">
         </div>
+        <div id="gaugeDerived" class="gnote"></div>
+        <div class="two" style="margin-top:8px">
+          <input type="text" id="swatchName" placeholder="Swatch name (e.g. DK cotton 3.5mm)">
+          <button class="btn ghost sm" id="saveSwatchBtn">💾 Save swatch</button>
+        </div>
+        <select id="useSwatch"><option value="">Load a saved swatch…</option></select>
 
         <!-- HAT inputs -->
         <div id="hatInputs" hidden>
@@ -187,6 +194,14 @@
           <div class="field"><label>Sleeve volume</label>
             <select id="balloon"><option value="1.25">Gentle (1.25×)</option><option value="1.4" selected>Lantern (1.4×)</option><option value="1.6">Balloon (1.6×)</option></select></div>
         </div>
+        <div class="group-label">Construction</div>
+        <div class="field"><label>Ribbing <span class="hint">waistband &amp; cuffs</span></label>
+          <select id="ribStyle">
+            <option value="sideways" selected>Sideways back-loop rib (stretchiest)</option>
+            <option value="post">In the round · fpdc/bpdc rib</option>
+          </select>
+        </div>
+
         <div class="group-label">Silhouette</div>
         <div class="two">
           <label class="chk"><input type="checkbox" id="sleeveless"> Sleeveless</label>
@@ -223,6 +238,72 @@
         Starting counts from your gauge — crochet relaxes and stretches, so try pieces on as you go,
         especially the waistband and cuffs. Written in US crochet terms.
       </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SWATCH TOOL ============ -->
+<div class="wrap" id="swatchView" hidden>
+  <button class="btn ghost sm" id="swBackBtn" style="margin-bottom:14px">← Home</button>
+  <div class="grid">
+    <div class="col-in">
+      <div class="panel">
+        <h2 id="swTitle">New gauge swatch</h2>
+        <p class="sub">Measure your gauge the way the piece is actually worked, and save it with the yarn you used.</p>
+
+        <div class="group-label">Yarn</div>
+        <div class="field"><label>Swatch name</label><input type="text" id="swName" placeholder="e.g. Paintbox Cotton DK · 3.5 mm"></div>
+        <div class="two">
+          <div class="field"><label>Brand</label><input type="text" id="swBrand" placeholder="Paintbox"></div>
+          <div class="field"><label>Line</label><input type="text" id="swLine" placeholder="Cotton DK"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Fibre</label><input type="text" id="swFiber" placeholder="100% cotton"></div>
+          <div class="field"><label>Weight</label><input type="text" id="swWeight" placeholder="DK / light worsted"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label>Hook</label><input type="text" id="swHook" placeholder="3.5 mm"></div>
+          <div class="field"><label>Colourway</label><input type="text" id="swColorway" placeholder="name / dye lot"></div>
+        </div>
+
+        <div class="group-label">Units</div>
+        <div class="seg" id="swUnitSeg"><button data-unit="cm" class="on">cm</button><button data-unit="in">inches</button></div>
+
+        <div class="group-label">Measured gauge <span class="hint" style="font-weight:400">(fill the ones you swatched)</span></div>
+        <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
+        <div class="gauge"><div class="gl">Rib</div>
+          <input type="number" id="swRibSts" step="0.5"><input type="number" id="swRibRows" step="0.5">
+          <input type="number" id="swRibW" step="0.1"><input type="number" id="swRibH" step="0.1"></div>
+        <div class="gauge"><div class="gl">Hdc</div>
+          <input type="number" id="swHdcSts" step="0.5"><input type="number" id="swHdcRows" step="0.5">
+          <input type="number" id="swHdcW" step="0.1"><input type="number" id="swHdcH" step="0.1"></div>
+        <div class="gauge"><div class="gl">Sc</div>
+          <input type="number" id="swScSts" step="0.5"><input type="number" id="swScRows" step="0.5">
+          <input type="number" id="swScW" step="0.1"><input type="number" id="swScH" step="0.1"></div>
+        <div id="swDerived" class="gnote"></div>
+
+        <div class="btnrow" style="margin-top:12px">
+          <button class="btn" id="swSaveBtn">💾 Save swatch</button>
+          <button class="btn ghost" id="swSaveUseBtn">Save &amp; use in studio →</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-out">
+      <div class="group-label" style="margin-top:0">How to swatch</div>
+      <div class="seg" id="swStitchSeg">
+        <button data-st="rib" class="on">Rib</button>
+        <button data-st="hdc">Hdc</button>
+        <button data-st="sc">Sc</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+        <span style="font-size:12.5px;font-weight:700">Worked</span>
+        <div class="seg" id="swWorkedSeg">
+          <button data-w="flat">Flat</button>
+          <button data-w="round">In the round</button>
+        </div>
+      </div>
+      <div id="swWorkedNote" class="gnote" style="margin-top:6px"></div>
+      <div class="refbox" id="swInstr" style="margin-top:12px"></div>
     </div>
   </div>
 </div>
