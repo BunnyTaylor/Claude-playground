@@ -12,7 +12,20 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <script>
   if ("serviceWorker" in navigator) {
-    addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+    // Self-heal: when an updated service worker takes control, reload once so the
+    // new HTML and JS are served together. Without this, a browser that cached an
+    // old app.js could pair it with a new index.html (mismatched UI). Guarded so
+    // it only reloads on an *update*, never on the first-ever install.
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (reloaded || !hadController) return;
+      reloaded = true;
+      window.location.reload();
+    });
+    addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").then(function (reg) { reg.update(); }).catch(function () {});
+    });
   }
 </script>
 </head>

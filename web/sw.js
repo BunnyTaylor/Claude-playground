@@ -9,7 +9,7 @@
  * (The previous version was cache-first, which meant a returning visitor kept
  * seeing the first files their browser ever cached — updates never showed.)
  */
-const CACHE = "mushroom-v3";
+const CACHE = "mushroom-v4";
 const ASSETS = [
   "./",
   "index.html",
@@ -41,7 +41,10 @@ self.addEventListener("fetch", (e) => {
   // Only manage our own origin; let anything cross-origin go straight to network.
   if (new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
-    fetch(req)
+    // `cache: "no-cache"` forces the SW to revalidate with the server (a
+    // conditional request) instead of trusting the browser's HTTP cache — so a
+    // freshly deployed script can never be masked by a still-valid cached copy.
+    fetch(req, { cache: "no-cache" })
       .then((resp) => {
         // Freshest copy wins — refresh the cache for offline use next time.
         if (resp.ok) {
