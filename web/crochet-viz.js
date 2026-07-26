@@ -13,8 +13,9 @@ var CrochetViz = (function (Core) {
 
   var DEFAULT_PALETTE = {
     cap: "#B83A2B", capDeep: "#7C271F", spot: "#FCF8EF", body: "#F2E4C9",
-    moss: "#6F824F", line: "#e4cfb0", bg: "#F3DEDE"
+    moss: "#6F824F", line: "#e4cfb0", bg: "#F1EADB"
   };
+  var CAPTION_INK = "#7a6a52";   // neutral label/caption colour (theme, not garment)
 
   function e(v) { return (Math.round(v * 100) / 100).toString(); }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -236,7 +237,7 @@ var CrochetViz = (function (Core) {
         var x2 = width - 116;
         parts.push('<line x1="' + e(cx + half) + '" y1="' + e(y) + '" x2="' + e(x2) + '" y2="' + e(y) + '" stroke="' + ink + '" stroke-width="1" stroke-dasharray="2 2"/>');
         parts.push('<circle cx="' + e(cx + half) + '" cy="' + e(y) + '" r="2.2" fill="' + ink + '"/>');
-        parts.push('<text x="' + e(x2 + 5) + '" y="' + e(y + 4) + '" font-family="Nunito,sans-serif" font-size="11.5" fill="' + ink + '">' + esc(label) + '</text>');
+        parts.push('<text x="' + e(x2 + 5) + '" y="' + e(y + 4) + '" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="' + ink + '">' + esc(label) + '</text>');
       };
       hlabel(flTopHalf, yFlTop, "upper bust " + fmt(upperBust, u));
       hlabel(waistHalf, yWaist, "waist " + fmt(meta.waistbandCirc, u));
@@ -244,11 +245,11 @@ var CrochetViz = (function (Core) {
       var lx = 48;
       parts.push('<line x1="' + lx + '" y1="' + e(yWaist) + '" x2="' + lx + '" y2="' + e(yHem) + '" stroke="' + ink + '" stroke-width="1"/>');
       [yWaist, yHem].forEach(function (yy) { parts.push('<line x1="' + (lx - 4) + '" y1="' + e(yy) + '" x2="' + (lx + 4) + '" y2="' + e(yy) + '" stroke="' + ink + '" stroke-width="1"/>'); });
-      parts.push('<text x="' + (lx + 7) + '" y="' + e((yWaist + yHem) / 2) + '" font-family="Nunito,sans-serif" font-size="11.5" fill="' + ink + '">skirt ' + esc(fmt(skirtLen, u)) + '</text>');
+      parts.push('<text x="' + (lx + 7) + '" y="' + e((yWaist + yHem) / 2) + '" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="' + ink + '">skirt ' + esc(fmt(skirtLen, u)) + '</text>');
     }
 
     // caption
-    parts.push('<text x="' + cx + '" y="' + (height - 24) + '" text-anchor="middle" font-family="Georgia, serif" font-size="15" fill="' + pal.capDeep + '">preview · waist ' + esc(fmt(meta.waistbandCirc, u)) + ' · hem ' + esc(fmt(hem, u)) + ' · ' + nSizes + ' spot size' + (nSizes !== 1 ? "s" : "") + '</text>');
+    parts.push('<text x="' + cx + '" y="' + (height - 24) + '" text-anchor="middle" font-family="Georgia, serif" font-size="15" fill="' + CAPTION_INK + '">preview · waist ' + esc(fmt(meta.waistbandCirc, u)) + ' · hem ' + esc(fmt(hem, u)) + ' · ' + nSizes + ' spot size' + (nSizes !== 1 ? "s" : "") + '</text>');
 
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Front-view preview of the mushroom dress">' + parts.join("") + "</svg>";
   }
@@ -312,7 +313,7 @@ var CrochetViz = (function (Core) {
     // spots on the dome (clipped to the dome so none bleed onto the brim/background)
     var radii = spotDiasCm(result, inp, Core, u).map(function (d) { return Math.max(4, (d / 2) * scale * 1.6); });
     scatter(parts, { x0: cx - headHalf + 6, x1: cx + headHalf - 6, y0: yBase - domeH + 8, y1: yBase - 6, ellipse: true, cx: cx, cy: yBase, rx: headHalf, ry: domeH }, radii, Math.round(headDia * 31), pal, "hatDome");
-    parts.push('<text x="' + cx + '" y="' + (height - 18) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + pal.capDeep + '">bucket hat · head ' + esc(fmt(meta.headCirc, u)) + '</text>');
+    parts.push('<text x="' + cx + '" y="' + (height - 18) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + CAPTION_INK + '">bucket hat · head ' + esc(fmt(meta.headCirc, u)) + '</text>');
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket hat">' + parts.join("") + "</svg>";
   }
 
@@ -348,7 +349,7 @@ var CrochetViz = (function (Core) {
     }
     parts.push('<ellipse cx="' + cx + '" cy="' + e(yTop) + '" rx="' + e(half) + '" ry="' + e(ry) + '" fill="none" stroke="' + pal.capDeep + '" stroke-width="2"/>');
     parts.push('<path d="M ' + e(cx - half) + ' ' + e(yTop) + ' q ' + e(half) + ' -18 ' + e(2 * half) + ' 0" fill="none" stroke="' + pal.body + '" stroke-width="4" stroke-linecap="round"/>');
-    parts.push('<text x="' + cx + '" y="' + (height - 16) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + pal.capDeep + '">bucket bag · ⌀ ' + esc(fmt(dia, u)) + ' × ' + esc(fmt(ht, u)) + '</text>');
+    parts.push('<text x="' + cx + '" y="' + (height - 16) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + CAPTION_INK + '">bucket bag · ⌀ ' + esc(fmt(dia, u)) + ' × ' + esc(fmt(ht, u)) + '</text>');
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket bag">' + parts.join("") + "</svg>";
   }
 
