@@ -91,9 +91,35 @@ test("evenAdjust consumes and produces exact counts", () => {
     if (s === `${st}2tog`) return [2, 1];
     throw new Error("unparsed segment: " + s);
   };
+  // split a comma-separated body on ", " but only at paren depth 0, so nested
+  // "(...) N times" groups stay intact.
+  const splitTop = (body) => {
+    const out = []; let depth = 0, start = 0;
+    for (let i = 0; i < body.length; i++) {
+      const ch = body[i];
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (depth === 0 && ch === "," && body[i + 1] === " ") { out.push(body.slice(start, i)); i++; start = i + 1; }
+    }
+    out.push(body.slice(start));
+    return out;
+  };
+  // [consumed, produced] for one item: a leaf segment, or a "(<body>) N times"
+  // group (recursively summed × N).
+  const sumItem = (item) => {
+    const m = item.match(/^\((.+)\) (\d+) times$/);
+    if (m) { const [c, p] = sumBody(m[1]); return [c * +m[2], p * +m[2]]; }
+    return seg(item);
+  };
+  const sumBody = (body) => {
+    let c = 0, p = 0;
+    for (const t of splitTop(body)) { const [sc, sp] = sumItem(t); c += sc; p += sp; }
+    return [c, p];
+  };
   // parse a full evenAdjust string → [consumed, produced], or null for the
   // count-less forms (identity / more-than-doubling fallback). Handles one or
-  // more "*<body>; rep from * N times" blocks plus an optional trailing run.
+  // more "*<body>; rep from * N times" blocks (body may contain nested groups)
+  // plus an optional trailing run.
   const parse = (str) => {
     if (str === `${st} in each st around`) return null;
     if (str.includes("evenly to")) return null;
@@ -103,11 +129,12 @@ test("evenAdjust consumes and produces exact counts", () => {
     while ((m = re.exec(str))) {
       matched = true; end = re.lastIndex;
       const reps = +m[2];
-      for (const t of m[1].split(", ")) { const [sc, sp] = seg(t); c += sc * reps; p += sp * reps; }
+      const [bc, bp] = sumBody(m[1]);
+      c += bc * reps; p += bp * reps;
     }
     assert.ok(matched, "recognised shape: " + str);
     const rest = str.slice(end).replace(/^,\s*/, "").trim();   // e.g. a decrease tail run
-    if (rest) for (const t of rest.split(", ")) { const [sc, sp] = seg(t); c += sc; p += sp; }
+    if (rest) for (const t of splitTop(rest)) { const [sc, sp] = sumItem(t); c += sc; p += sp; }
     return [c, p];
   };
   for (let from = 20; from <= 400; from += 7) {

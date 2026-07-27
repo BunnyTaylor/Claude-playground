@@ -25,6 +25,7 @@ var CrochetCore = (function () {
 
   var even = function (n) { n = Math.trunc(n); return (n % 2) ? n + 1 : n; };
   var mult = function (n, m) { return Math.max(m, jsround(n / m) * m); };
+  var gcdInt = function (a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { var t = b; b = a % b; a = t; } return a; };
 
   function density(g, unit) {
     var w = toCm(g.width, unit), h = toCm(g.height, unit);
@@ -91,25 +92,35 @@ var CrochetCore = (function () {
     }
     var inc = to - frm;
     if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    // Spread evenly with NO tail clump: split the round into `groups` (one for each
-    // minority stitch — the increases, or the plain sts when near-doubling), then
-    // share the majority stitches across those groups so the group sizes differ by
-    // at most one. Any remainder becomes a few slightly-larger groups worked first,
-    // not a block dumped at the end.
+    // Distribute the increases as evenly as possible AROUND the round, not front-
+    // loaded. Split the round into `groups` (one per minority stitch — the increases,
+    // or the plain sts when near-doubling) and share the majority stitches so group
+    // sizes differ by at most one: `rr` "large" groups (q+1 majority) and the rest
+    // "small" (q majority). Rather than dumping every large group at the start, we
+    // factor out gcd(large, small) equal arcs and repeat one arc around the round, so
+    // the denser groups recur at evenly-spaced points. (gcd 1 → can't split evenly
+    // while staying a short repeat, so fall back to two blocks.)
     var doubles = inc, singles = frm - inc;
     var majDouble = doubles > singles;                 // which stitch repeats within a group
     var majCount = majDouble ? doubles : singles;
     var groups = majDouble ? singles : doubles;        // one minority ("divider") stitch per group
-    var q = Math.floor(majCount / groups), rr = majCount % groups;
+    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr large groups, groups-rr small
     var maj = majDouble ? "2 " + stitch : stitch, div = majDouble ? stitch : "2 " + stitch;
-    var block = function (k, n) {
+    var body = function (k) {                          // one group: k majority sts, then 1 divider
       var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
-      return "*" + majPart + ", " + div + " in next st; rep from * " + n + " times";
+      return majPart + ", " + div + " in next st";
     };
-    var parts = [];
-    if (rr > 0) parts.push(block(q + 1, rr));           // the `rr` larger groups, worked first
-    if (groups - rr > 0) parts.push(block(q, groups - rr));
-    return parts.join(", ");
+    var block = function (k, n) { return "*" + body(k) + "; rep from * " + n + " times"; };
+    var big = rr, small = groups - rr;
+    if (big === 0) return block(q, small);             // all groups uniform (q majority)
+    if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
+    var g = gcdInt(big, small);
+    if (g === 1) {                                     // coprime → two blocks (large first)
+      return block(q + 1, big) + ", " + block(q, small);
+    }
+    // g equal arcs: each arc has big/g large groups then small/g small groups.
+    var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
+    return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {
