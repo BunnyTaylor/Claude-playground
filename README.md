@@ -33,16 +33,17 @@ Dockerfile              self-host on any Docker host (nginx static)
 
 ## Gauge swatches
 
-There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved one)
-that records gauges against the **yarn they were measured on** (brand, line,
-fibre, weight, hook, colourway). A swatch profile holds a **list of
-measurements** you add on demand (via a "+ Add" menu, so it never crowds); each
-measurement is a **stitch × construction** — e.g. `BLO rib · flat`,
-`Post rib · in the round`, `Hdc · in the round` — so flat and round of the same
-stitch are separate entries and you can mix them freely on one profile. Each
-carries **construction-aware instructions** (a flat back-and-forth swatch
-doesn't equal in-the-round fabric), a **relaxed** gauge, and an optional
-**stretched** size. For stretchy stitches (rib) the stretched size gives a
+There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved one).
+A profile is one **yarn identity** (brand / line / fibre / weight) — its display
+name is **derived** from that, no manual naming — plus the **colours it's used
+in** (a multi-value chip field) and a **list of measurements** you add on demand
+(via a "+ Add" menu, so it never crowds). Each measurement is a
+**stitch × construction** — e.g. `BLO rib · flat`, `Post rib · in the round`,
+`Hdc · in the round` — with **its own hook**, so one profile covers several hooks
+(and colours) instead of needing a profile each. Flat and round of the same
+stitch are separate entries, so you can mix them freely. Each measurement carries
+**construction-aware instructions** (a flat back-and-forth swatch doesn't equal
+in-the-round fabric), a **relaxed** gauge, and an optional **stretched** size. For stretchy stitches (rib) the stretched size gives a
 stretch factor that **auto-suggests the waistband grip** when you use the swatch
 in the studio — so a very stretchy rib gets deeper negative ease automatically.
 
