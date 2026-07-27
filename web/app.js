@@ -27,17 +27,22 @@ const GFIELDS = { Sts: "sts", Rows: "rows", W: "width", H: "height" };
 const BODY = ["bust", "waist", "upperBust", "hip", "upperArm", "wrist", "skirtLen", "sleeveLen"];
 const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen" };
 // measurement fields that must be numerically converted when the unit changes
-const CONVERT = [...BODY, "ribW", "ribH", "hdcW", "hdcH", "scW", "scH", ...Object.keys(ACC)];
+const CONVERT = [...BODY, ...Object.keys(ACC)];
+// The studio's active gauge now comes from picking saved swatches (per stitch),
+// not raw inputs. studioGauge holds the live numbers; DEFAULT_GAUGE seeds it so a
+// fresh project previews before any swatch is chosen.
+const DEFAULT_GAUGE = {
+  rib: { sts: 18, rows: 9, width: 10, height: 10 },
+  hdc: { sts: 14, rows: 11, width: 10, height: 10 },
+  sc:  { sts: 16, rows: 18, width: 10, height: 10 },
+};
+let studioGauge = JSON.parse(JSON.stringify(DEFAULT_GAUGE));
+const GAUGE_SEL = { rib: "gaugeSelRib", hdc: "gaugeSelHdc", sc: "gaugeSelSc" };
 
 function gather() {
   const num = (id) => parseFloat($(id).value);
   const gauges = {};
-  for (const g of GAUGES) {
-    gauges[g] = {
-      sts: num(g + "Sts"), rows: num(g + "Rows"),
-      width: num(g + "W"), height: num(g + "H"),
-    };
-  }
+  for (const g of GAUGES) gauges[g] = { ...studioGauge[g] };   // set via the per-stitch swatch pickers
   const body = {};
   for (const b of BODY) body[b] = num(b);
 
@@ -96,11 +101,10 @@ function apply(state) {
   }
 
   for (const g of GAUGES) {
-    $(g + "Sts").value = input.gauges[g].sts;
-    $(g + "Rows").value = input.gauges[g].rows;
-    $(g + "W").value = input.gauges[g].width;
-    $(g + "H").value = input.gauges[g].height;
+    const src = (input.gauges && input.gauges[g]) || DEFAULT_GAUGE[g];
+    studioGauge[g] = { sts: src.sts, rows: src.rows, width: src.width, height: src.height };
   }
+  populateGaugeSelectors();
   for (const b of BODY) $(b).value = input.body[b];
 
   $("pName").value = (ui && ui.name) || "";
@@ -186,6 +190,7 @@ function openStudio(collId, genId, setHash = true) {
   $("homeView").hidden = true;
   $("swatchView").hidden = true;
   $("studioView").hidden = false;
+  populateGaugeSelectors();   // refresh pickers so newly-saved swatches show up
   if (setHash) location.hash = "#/" + curColl.id + "/" + f.generator.id;
   generate();
 }
@@ -249,9 +254,8 @@ const loadSwatches = () => { try { const s = JSON.parse(localStorage.getItem(LS_
 const saveSwatches = (s) => localStorage.setItem(LS_SWATCHES, JSON.stringify(s));
 
 function gatherGauges() {
-  const num = (id) => parseFloat($(id).value);
   const g = {};
-  for (const k of GAUGES) g[k] = { sts: num(k + "Sts"), rows: num(k + "Rows"), width: num(k + "W"), height: num(k + "H") };
+  for (const k of GAUGES) g[k] = { ...studioGauge[k] };
   return g;
 }
 
@@ -266,34 +270,64 @@ function densityIn(gauge, u) {
 
 function updateGaugeDerived() {
   const parts = GAUGES.map((k) => {
-    const g = { sts: parseFloat($(k + "Sts").value), rows: parseFloat($(k + "Rows").value), width: parseFloat($(k + "W").value), height: parseFloat($(k + "H").value) };
-    const d = densityIn(g, unit);
+    const d = densityIn(studioGauge[k], unit);
     return d ? `<b>${k}</b> ${d.st}×${d.row}` : "";
   }).filter(Boolean).join(" · ");
   $("gaugeDerived").innerHTML = parts ? `≈ ${parts} <span style="opacity:.7">st×row per ${unit}</span>` : "";
 }
 
-function saveCurrentSwatch() {
-  const name = ($("swatchName").value || "").trim() || "Untitled swatch";
-  const g = gatherGauges();   // studio inputs: { rib, hdc, sc }
-  const ribEl = $("ribStyle");
-  const post = !!ribEl && ribEl.value === "post";
-  const measurements = [];
-  const add = (stitch, worked, src) => {
-    if (src && src.sts > 0 && src.width > 0) measurements.push({ stitch, worked, sts: src.sts, rows: src.rows, width: src.width, height: src.height });
-  };
-  add(post ? "ribPost" : "ribBlo", post ? "round" : "flat", g.rib);
-  add("hdc", "round", g.hdc);
-  add("sc", "round", g.sc);
-  const s = loadSwatches();
-  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, measurements };
-  saveSwatches(s);
-  populateSwatchSelect();
-  $("status").textContent = `saved swatch “${name}”`;
+// saved measurements that fit a studio gauge slot ('rib' accepts BLO or post rib)
+function applicableMeas(stitch) {
+  const sw = loadSwatches();
+  const out = [];
+  for (const id of Object.keys(sw).sort((a, b) => (sw[b].savedAt || 0) - (sw[a].savedAt || 0))) {
+    for (const m of (sw[id].measurements || [])) {
+      if (!swMeasured(m)) continue;
+      const ok = stitch === "rib" ? (m.stitch === "ribBlo" || m.stitch === "ribPost") : m.stitch === stitch;
+      if (ok) out.push({ id, key: measKey(m), name: sw[id].name, m });
+    }
+  }
+  return out;
+}
+
+// (re)fill the three per-stitch gauge dropdowns from saved swatches; keeps selection
+function populateGaugeSelectors() {
+  for (const stitch of GAUGES) {
+    const el = $(GAUGE_SEL[stitch]); if (!el) continue;
+    const cur = el.value;
+    const list = applicableMeas(stitch);
+    let html = `<option value="__default__">Standard gauge</option>`;
+    html += list.map(({ id, key, name, m }) => {
+      const d = densityIn(m, unit);
+      const lbl = SW_STITCH_LABEL[m.stitch] + "·" + (m.worked === "round" ? "rnd" : "flat");
+      return `<option value="${id}|${key}">${esc(name)} — ${lbl}${d ? ` (${d.st}×${d.row})` : ""}</option>`;
+    }).join("");
+    html += `<option value="__new__">＋ New swatch…</option>`;
+    el.innerHTML = html;
+    el.value = (cur && [...el.options].some((o) => o.value === cur)) ? cur : "__default__";
+  }
+}
+
+// apply a dropdown choice to studioGauge; returns false if it navigated away (New)
+function setGaugeFromSel(stitch, val) {
+  const el = $(GAUGE_SEL[stitch]);
+  if (val === "__new__") { if (el) el.value = "__default__"; openSwatch(); return false; }
+  if (val === "__default__" || !val) { studioGauge[stitch] = { ...DEFAULT_GAUGE[stitch] }; return true; }
+  const [id, key] = val.split("|");
+  const rec = loadSwatches()[id];
+  const m = rec && (rec.measurements || []).find((x) => measKey(x) === key);
+  if (!m) { studioGauge[stitch] = { ...DEFAULT_GAUGE[stitch] }; return true; }
+  studioGauge[stitch] = { sts: m.sts, rows: m.rows, width: m.width, height: m.height };
+  if (stitch === "rib") {   // a stretchy rib auto-sets the waistband grip
+    const f = measStretchFactor(m), be = $("bandEase");
+    if (f > 1.001 && be) be.value = suggestGripValue(f);
+  }
+  return true;
 }
 
 const swMeasured = (m) => m && m.sts > 0 && m.width > 0;
 
+// "Use in studio" from a swatch card: point every matching gauge slot at this swatch
 function applySwatch(id) {
   const s = loadSwatches()[id];
   if (!s) return { stitches: [], grip: null };
@@ -304,27 +338,21 @@ function applySwatch(id) {
     const cands = ms.filter((m) => m.stitch === stitch && swMeasured(m));
     return cands.find((m) => m.worked === preferWorked) || cands[0] || null;
   };
-  const applied = [];
-  const fill = (studioKey, src) => {
-    const el = $(studioKey + "Sts");
-    if (!el || !swMeasured(src)) return;
-    $(studioKey + "Sts").value = src.sts; $(studioKey + "Rows").value = src.rows;
-    $(studioKey + "W").value = src.width; $(studioKey + "H").value = src.height;
-    applied.push(studioKey);
-  };
-  // The studio uses one `rib` gauge; pick the construction matching the project's
-  // Ribbing setting (post → post rib, else BLO), falling back to whichever exists.
+  populateGaugeSelectors();
   const post = !!$("ribStyle") && $("ribStyle").value === "post";
-  const ribMeas = post ? pick("ribPost", "round") : pick("ribBlo", "flat");
-  fill("rib", ribMeas);
-  fill("hdc", pick("hdc", "round"));
-  fill("sc", pick("sc", "round"));
-  // If the rib measurement recorded a stretched size, auto-set the waistband grip.
+  const targets = { rib: post ? pick("ribPost", "round") : pick("ribBlo", "flat"), hdc: pick("hdc", "round"), sc: pick("sc", "round") };
+  const applied = [];
   let grip = null;
-  if (ribMeas) {
-    const f = measStretchFactor(ribMeas);
-    const be = $("bandEase");
-    if (f > 1.001 && be) { be.value = suggestGripValue(f); grip = suggestGripLabel(f); }
+  for (const stitch of GAUGES) {
+    const m = targets[stitch];
+    if (!m) continue;
+    studioGauge[stitch] = { sts: m.sts, rows: m.rows, width: m.width, height: m.height };
+    const el = $(GAUGE_SEL[stitch]); if (el) el.value = id + "|" + measKey(m);
+    applied.push(stitch);
+    if (stitch === "rib") {
+      const f = measStretchFactor(m), be = $("bandEase");
+      if (f > 1.001 && be) { be.value = suggestGripValue(f); grip = suggestGripLabel(f); }
+    }
   }
   return { stitches: applied, grip };
 }
@@ -343,12 +371,8 @@ function swatchLabel(rec) {
   return rec.name + (tail ? " — " + tail : "");
 }
 
-function populateSwatchSelect() {
-  const s = loadSwatches();
-  const ids = Object.keys(s).sort((a, b) => s[b].savedAt - s[a].savedAt);
-  $("useSwatch").innerHTML = `<option value="">Load a saved swatch…</option>` +
-    ids.map((id) => `<option value="${id}">${esc(swatchLabel(s[id]))}</option>`).join("");
-}
+// kept as the name every call site uses; now refreshes the per-stitch gauge pickers
+function populateSwatchSelect() { populateGaugeSelectors(); }
 
 function renderSwatches() {
   const guide = `<details class="refbox"><summary>How to make a gauge swatch</summary><div class="guide">
@@ -884,6 +908,10 @@ function wire() {
         const v = parseFloat($(id).value);
         if (!isNaN(v)) $(id).value = Math.round(f(v) * 10) / 10;
       }
+      // gauge W/H live in studioGauge now (not inputs) — convert them too
+      for (const g of GAUGES) for (const dim of ["width", "height"]) {
+        if (studioGauge[g][dim] > 0) studioGauge[g][dim] = Math.round(f(studioGauge[g][dim]) * 10) / 10;
+      }
       const ds = $("dotSizes").value.split(",").map((s) => parseFloat(s.trim()))
         .filter((n) => !isNaN(n)).map((n) => Math.round(f(n) * 10) / 10);
       if (ds.length) $("dotSizes").value = ds.join(", ");
@@ -926,19 +954,19 @@ function wire() {
   $("backBtn").addEventListener("click", showHome);
   addEventListener("hashchange", route);
 
-  // gauge swatches
-  $("saveSwatchBtn").addEventListener("click", saveCurrentSwatch);
-  $("useSwatch").addEventListener("change", (e) => {
-    if (!e.target.value) return;
-    const rec = loadSwatches()[e.target.value];
-    const res = applySwatch(e.target.value);
-    e.target.value = "";
-    if (rec) pendingStatus = res.stitches.length
-      ? `loaded ${res.stitches.join(", ")} gauge from “${rec.name}”${res.grip ? ` · set ${res.grip} waistband grip` : ""} (other stitches unchanged)`
-      : `“${rec.name}” has no measured gauges yet`;
-    clearTimeout(debounceTimer);   // supersede the debounced generate the select change queued
-    generate();
-  });
+  // per-stitch gauge pickers — choose a saved swatch (or add one) for each stitch
+  for (const stitch of GAUGES) {
+    $(GAUGE_SEL[stitch]).addEventListener("change", (e) => {
+      const val = e.target.value;
+      const opt = e.target.selectedOptions[0];
+      const label = opt ? opt.textContent : "";
+      const proceed = setGaugeFromSel(stitch, val);   // false = navigated to New swatch
+      if (!proceed) return;
+      pendingStatus = val === "__default__" ? `${stitch}: standard gauge` : `${stitch} gauge from “${label.split(" — ")[0]}”`;
+      clearTimeout(debounceTimer);
+      generate();
+    });
+  }
   $("swatches").addEventListener("click", (e) => {
     const use = e.target.closest("[data-usesw]");
     const del = e.target.closest("[data-delsw]");

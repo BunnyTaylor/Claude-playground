@@ -46,6 +46,11 @@ doesn't equal in-the-round fabric), a **relaxed** gauge, and an optional
 stretch factor that **auto-suggests the waistband grip** when you use the swatch
 in the studio — so a very stretchy rib gets deeper negative ease automatically.
 
+In the **studio**, gauge isn't typed in as raw numbers — each stitch (rib, hdc,
+sc) has a **swatch picker** listing the applicable saved measurements (plus
+"＋ New swatch"), so you build a project by choosing swatches. Picking a stretchy
+rib measurement auto-sets the waistband grip from its stretch factor.
+
 Each saved swatch shows its derived density (`stitches ÷ width` and
 `rows ÷ height`, as st × row per cm/inch), plus its colourway and any freeform
 notes (blocking, wash behaviour…) — colour is just a record, it doesn't affect
