@@ -588,10 +588,14 @@ function measDerivedHtml(key) {
   const t = SW_TYPE_BY_KEY[key];
   const d = densityIn({ sts: m.sts, rows: m.rows, width: m.width, height: m.height }, swUnit);
   let s = d ? `≈ <b>${d.st}×${d.row}</b> st×row per ${swUnit}` : `<span style="opacity:.65">enter sts + width for density</span>`;
-  const f = measStretchFactor(m);
-  if (f > 1.001) {
-    s += ` · stretches <b>+${Math.round((f - 1) * 100)}%</b>`;
-    if (t.stretchy) s += ` → suggests a <b>${suggestGripLabel(f)}</b> waistband grip`;
+  const wF = (m.stretchW > 0 && m.width > 0) ? m.stretchW / m.width : 0;
+  const hF = (m.stretchH > 0 && m.height > 0) ? m.stretchH / m.height : 0;
+  const bits = [];
+  if (wF > 1.001) bits.push(`+${Math.round((wF - 1) * 100)}% wide`);
+  if (hF > 1.001) bits.push(`+${Math.round((hF - 1) * 100)}% tall`);
+  if (bits.length) {
+    s += ` · stretches <b>${bits.join(", ")}</b>`;
+    if (t.stretchy) s += ` → suggests a <b>${suggestGripLabel(Math.max(wF, hF))}</b> waistband grip`;
   }
   return s;
 }
@@ -600,12 +604,15 @@ function measCardHtml(key) {
   const m = swMeas[key], t = SW_TYPE_BY_KEY[key];
   const v = (x) => (x > 0 ? x : "");
   const inp = (f, step, ph) => `<input type="number" step="${step}" data-k="${key}" data-f="${f}" value="${v(m[f])}"${ph ? ` placeholder="${ph}"` : ""}>`;
+  // Columns pair each count with its dimension: Sts | W , Rows | H. The stretched
+  // row leaves the count cells blank (counts don't change) and puts stretched-W
+  // directly under W and stretched-H under H, so each direction reads top-to-bottom.
   return `<div class="swmeas" data-k="${key}">
     <div class="swmtop"><b>${measTypeLabel(t)}</b><button class="x" data-rm="${key}" title="Remove">✕</button></div>
-    <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
-    <div class="gauge"><div class="gl">Relaxed</div>${inp("sts", "0.5")}${inp("rows", "0.5")}${inp("width", "0.1")}${inp("height", "0.1")}</div>
-    <div class="gauge"><div class="gl" style="opacity:.75">Stretched</div><div></div><div></div>${inp("stretchW", "0.1", "W")}${inp("stretchH", "0.1", "H")}</div>
-    <div class="gnote" style="margin:1px 0 4px">Optional — pull it firmly (comfortable max) and note the new W × H.${t.stretchy ? " Recommended for rib." : ""}</div>
+    <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">W</div><div class="gh">Rows</div><div class="gh">H</div></div>
+    <div class="gauge"><div class="gl">Relaxed</div>${inp("sts", "0.5")}${inp("width", "0.1")}${inp("rows", "0.5")}${inp("height", "0.1")}</div>
+    <div class="gauge"><div class="gl" style="opacity:.75">Stretched</div><div></div>${inp("stretchW", "0.1", "→ W")}<div></div>${inp("stretchH", "0.1", "↓ H")}</div>
+    <div class="gnote" style="margin:1px 0 4px">Optional. Stretch the swatch <b>sideways</b> to a comfortable max and note the new <b>width</b>; stretch it <b>lengthwise</b> and note the new <b>height</b>. Sts/rows don't change.${t.stretchy ? " Recommended for rib." : ""}</div>
     <div class="swderiv gnote" data-d="${key}">${measDerivedHtml(key)}</div>
     <details class="refbox" style="margin-top:8px"><summary>How to swatch this</summary>${swInstrFor(t.stitch, t.worked)}</details>
   </div>`;
