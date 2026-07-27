@@ -71,20 +71,32 @@ var CrochetCore = (function () {
     if (to === frm) return stitch + " in each st around";
     if (to < frm) {
       var dec = frm - to, iv = Math.floor(frm / dec);
-      if (iv < 3) return "*" + stitch + "2tog; rep from * " + dec + " times, " +
-        stitch + " in each of last " + (frm - 2 * dec) + " sts";
+      // more than half removed can't be done with 2tog alone (needs 3tog+) — rare fallback
+      if (2 * dec > frm) return stitch + "2tog around, then " + stitch + " evenly to " + to + " sts";
+      if (iv < 3) return "*" + stitch + "2tog; rep from * " + dec + " times" +
+        (frm - 2 * dec > 0 ? ", " + stitch + " in each of last " + (frm - 2 * dec) + " sts" : "");
       var tail = frm - iv * dec;
       return "*" + stitch + " in each of next " + (iv - 2) + " sts, " + stitch +
         "2tog; rep from * " + dec + " times" +
         (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
     }
-    var inc = to - frm, iv2 = Math.floor(frm / inc);
-    if (iv2 < 1) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    var tail2 = frm - iv2 * inc;
-    var lead2 = (iv2 - 1) > 0 ? stitch + " in each of next " + (iv2 - 1) + " sts, " : "";
-    return "*" + lead2 + "2 " + stitch +
-      " in next st; rep from * " + inc + " times" +
-      (tail2 > 0 ? ", " + stitch + " in each of last " + tail2 + " sts" : "");
+    var inc = to - frm;
+    if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
+    // Distribute evenly by spreading whichever is the MINORITY — the increase
+    // stitches or the plain ones — so the shaping never bunches on one side.
+    var doubles = inc, singles = frm - inc;
+    if (doubles <= singles) {                       // increases are the minority → space them out
+      var iv2 = Math.floor(frm / doubles);
+      var tail2 = frm - iv2 * doubles;
+      var lead2 = (iv2 - 1) > 0 ? stitch + " in each of next " + (iv2 - 1) + " sts, " : "";
+      return "*" + lead2 + "2 " + stitch + " in next st; rep from * " + doubles + " times" +
+        (tail2 > 0 ? ", " + stitch + " in each of last " + tail2 + " sts" : "");
+    }
+    // plain stitches are the minority (near-doubling) → space the plain ones out
+    var ivs = Math.floor(frm / singles);
+    var tailD = frm - ivs * singles;
+    return "*2 " + stitch + " in each of next " + (ivs - 1) + " sts, " + stitch + " in next st; rep from * " +
+      singles + " times" + (tailD > 0 ? ", 2 " + stitch + " in each of last " + tailD + " sts" : "");
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {
