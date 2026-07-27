@@ -313,6 +313,7 @@ function populateGaugeSelectors() {
     el.value = (cur && [...el.options].some((o) => o.value === cur)) ? cur : "__default__";
   }
   populateColorList();
+  populateColorFill();
 }
 
 // apply a dropdown choice to studioGauge; returns false if it navigated away (New)
@@ -359,7 +360,14 @@ function applySwatch(id) {
       if (f > 1.001 && be) { be.value = suggestGripValue(f); grip = suggestGripLabel(f); }
     }
   }
+  fillColorRoles(swatchColors(s));   // pre-fill cap/spot/body from this profile's colours
   return { stitches: applied, grip };
+}
+
+// colours a profile is used in (array, or a legacy single/comma string)
+function swatchColors(rec) {
+  const y = (rec && rec.yarn) || {};
+  return Array.isArray(y.colorways) ? y.colorways : (y.colorway ? y.colorway.split(",").map((s) => s.trim()).filter(Boolean) : []);
 }
 
 // all colours across saved swatches → a <datalist> for the studio colour fields
@@ -367,11 +375,25 @@ function populateColorList() {
   const dl = $("swColorList"); if (!dl) return;
   const set = new Set();
   const sw = loadSwatches();
-  for (const id in sw) {
-    const y = sw[id].yarn || {};
-    (Array.isArray(y.colorways) ? y.colorways : (y.colorway ? [y.colorway] : [])).forEach((c) => c && set.add(c));
-  }
+  for (const id in sw) swatchColors(sw[id]).forEach((c) => c && set.add(c));
   dl.innerHTML = [...set].map((c) => `<option value="${esc(c)}"></option>`).join("");
+}
+
+// "Fill colours from a swatch" dropdown — profiles that list colours
+function populateColorFill() {
+  const el = $("colorFill"); if (!el) return;
+  const sw = loadSwatches();
+  const rows = Object.keys(sw).sort((a, b) => (sw[b].savedAt || 0) - (sw[a].savedAt || 0))
+    .map((id) => ({ id, rec: sw[id], cols: swatchColors(sw[id]) })).filter((x) => x.cols.length);
+  el.innerHTML = `<option value="">🎨 Fill colours from a swatch…</option>` +
+    rows.map(({ id, rec, cols }) => `<option value="${id}">${esc(swatchName(rec))} — ${esc(cols.join(", "))}</option>`).join("");
+  el.disabled = rows.length === 0;
+}
+
+// apply up to three colour names to the cap / spots / body roles (positional)
+function fillColorRoles(cols) {
+  const roles = ["capName", "spotName", "bodyName"];
+  roles.forEach((r, i) => { if (cols[i]) $(r).value = cols[i]; });
 }
 
 // kept as the name every call site uses; now refreshes the per-stitch gauge pickers
@@ -1035,6 +1057,16 @@ function wire() {
       generate();
     });
   }
+  // "Fill colours from a swatch" → set cap/spot/body names from that profile
+  $("colorFill").addEventListener("change", (e) => {
+    const rec = loadSwatches()[e.target.value];
+    e.target.value = "";
+    if (!rec) return;
+    fillColorRoles(swatchColors(rec));
+    pendingStatus = `colours from “${swatchName(rec)}”`;
+    clearTimeout(debounceTimer);
+    generate();
+  });
   $("swatches").addEventListener("click", (e) => {
     const use = e.target.closest("[data-usesw]");
     const del = e.target.closest("[data-delsw]");

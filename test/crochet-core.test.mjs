@@ -78,25 +78,38 @@ test("incPlan is a no-op when no increase is needed", () => {
 });
 
 test("evenAdjust consumes and produces exact counts", () => {
-  const parse = (from, to) => {
-    if (to === from) return [from, to];
-    if (to < from) {
-      const dec = from - to, iv = Math.floor(from / dec);
-      if (iv < 3) return [2 * dec + (from - 2 * dec), dec + (from - 2 * dec)];
-      const tail = from - iv * dec;
-      return [iv * dec + tail, dec * (iv - 1) + tail];
-    }
-    const inc = to - from, iv = Math.floor(from / inc);
-    if (iv < 1) return [from, to];
-    const tail = from - iv * inc;
-    return [iv * inc + tail, iv * inc + inc + tail];
+  const st = "hdc";
+  // count how many base sts a single instruction segment consumes and produces
+  const seg = (s) => {
+    let m;
+    if ((m = s.match(new RegExp(`^2 ${st} in each of (?:next|last) (\\d+) sts$`)))) return [+m[1], 2 * +m[1]];
+    if (s === `2 ${st} in next st`) return [1, 2];
+    if ((m = s.match(new RegExp(`^${st} in each of (?:next|last) (\\d+) sts$`)))) return [+m[1], +m[1]];
+    if (s === `${st} in next st`) return [1, 1];
+    if (s === `${st}2tog`) return [2, 1];
+    throw new Error("unparsed segment: " + s);
+  };
+  // parse a full evenAdjust string → [consumed, produced], or null for the
+  // count-less forms (identity / more-than-doubling fallback)
+  const parse = (str) => {
+    if (str === `${st} in each st around`) return null;
+    if (str.includes("evenly to")) return null;
+    const m = str.match(/^\*(.*); rep from \* (\d+) times(?:, (.*))?$/);
+    assert.ok(m, "recognised shape: " + str);
+    const body = m[1], reps = +m[2], tail = m[3];
+    let c = 0, p = 0;
+    for (const t of body.split(", ")) { const [sc, sp] = seg(t); c += sc * reps; p += sp * reps; }
+    if (tail) { const [sc, sp] = seg(tail); c += sc; p += sp; }
+    return [c, p];
   };
   for (let from = 20; from <= 400; from += 7) {
     for (let to = 20; to <= 400; to += 11) {
-      const [consumed, produced] = parse(from, to);
-      assert.equal(consumed, from, `consume ${from}->${to}`);
-      assert.equal(produced, to, `produce ${from}->${to}`);
-      assert.equal(typeof evenAdjust(from, to, "hdc"), "string");
+      const out = evenAdjust(from, to, st);
+      assert.equal(typeof out, "string");
+      const parsed = parse(out);
+      if (!parsed) continue;                          // identity / >2-per-st fallback
+      assert.equal(parsed[0], from, `consume ${from}->${to}: ${out}`);
+      assert.equal(parsed[1], to, `produce ${from}->${to}: ${out}`);
     }
   }
 });

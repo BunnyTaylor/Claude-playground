@@ -50,7 +50,10 @@ in the studio — so a very stretchy rib gets deeper negative ease automatically
 In the **studio**, gauge isn't typed in as raw numbers — each stitch (rib, hdc,
 sc) has a **swatch picker** listing the applicable saved measurements (plus
 "＋ New swatch"), so you build a project by choosing swatches. Picking a stretchy
-rib measurement auto-sets the waistband grip from its stretch factor.
+rib measurement auto-sets the waistband grip from its stretch factor. Colours
+flow from swatches too: **Fill colours from a swatch** sets cap/spot/body from a
+profile's colours, "Use in studio" pre-fills them, and each colour field
+autocompletes from every colour you've saved.
 
 Each saved swatch shows its derived density (`stitches ÷ width` and
 `rows ÷ height`, as st × row per cm/inch), plus its colourway and any freeform
