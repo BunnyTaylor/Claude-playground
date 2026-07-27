@@ -51,6 +51,8 @@ function gather() {
     dotDia: sizes.length ? sizes[0] : 2.5,
     ribStyle: $("ribStyle").value,
   };
+  // "auto" lets the engine pick negative ease by rib style; otherwise it's a fraction
+  if ($("bandEase").value !== "auto") style.bandEase = parseFloat($("bandEase").value);
   // one size -> uniform tapestry bands; several -> a scattered mix
   if (sizes.length > 1) style.dotSizes = sizes;
   if ($("sleeveless").checked) style.sleeveless = true;
@@ -73,6 +75,7 @@ function gather() {
       names: { capName: $("capName").value, spotName: $("spotName").value, bodyName: $("bodyName").value },
       dotSizes: $("dotSizes").value, dotGap: $("dotGap").value,
       waistEase: $("waistEase").value, fullness: $("fullness").value,
+      bandEase: $("bandEase").value,
       flare: $("flare").value, balloon: $("balloon").value,
       capCol: $("capCol").value, spotCol: $("spotCol").value, bodyCol: $("bodyCol").value,
     },
@@ -113,6 +116,7 @@ function apply(state) {
   setSelect("flare", S.flare);
   setSelect("balloon", S.balloon);
   setSelect("ribStyle", S.ribStyle || "sideways");
+  setSelect("bandEase", (ui && ui.bandEase) || (S.bandEase != null ? String(S.bandEase) : "auto"));
   if (ui) {
     $("capCol").value = ui.capCol || "#B83A2B";
     $("spotCol").value = ui.spotCol || "#FCF8EF";
@@ -217,13 +221,28 @@ function renderHome() {
 // Legacy swatches (and studio quick-saves) stored one `rib` gauge. The tool now
 // tracks BLO vs post rib separately, so normalise old records on load: a `rib`
 // gauge becomes ribPost if it was worked in the round, otherwise ribBlo.
+// Normalise old swatch schemas to the current one (a `measurements` list):
+//   - very old: a single `gauges.rib`  → ribBlo/ribPost by its worked tag
+//   - previous: `gauges.{ribBlo,ribPost,hdc,sc}` (each with a worked tag)
+//   - current:  `measurements: [{stitch,worked,sts,rows,width,height,stretchW?,stretchH?}]`
 function migrateSwatchRec(rec) {
-  const g = rec && rec.gauges;
-  if (g && g.rib && !g.ribBlo && !g.ribPost) {
-    const key = g.rib.worked === "round" ? "ribPost" : "ribBlo";
-    g[key] = { ...g.rib, worked: g.rib.worked || (key === "ribPost" ? "round" : "flat") };
+  if (!rec || rec.measurements) return rec;
+  const g = rec.gauges || {};
+  if (g.rib && !g.ribBlo && !g.ribPost) {
+    const k = g.rib.worked === "round" ? "ribPost" : "ribBlo";
+    g[k] = { ...g.rib, worked: g.rib.worked || (k === "ribPost" ? "round" : "flat") };
     delete g.rib;
   }
+  const REC = { ribBlo: "flat", ribPost: "round", hdc: "round", sc: "round" };
+  const measurements = [];
+  for (const stitch of ["ribBlo", "ribPost", "hdc", "sc"]) {
+    const m = g[stitch];
+    if (m && m.sts > 0 && m.width > 0) {
+      measurements.push({ stitch, worked: m.worked || REC[stitch], sts: m.sts, rows: m.rows, width: m.width, height: m.height });
+    }
+  }
+  rec.measurements = measurements;
+  delete rec.gauges;
   return rec;
 }
 const loadSwatches = () => { try { const s = JSON.parse(localStorage.getItem(LS_SWATCHES)) || {}; for (const id in s) migrateSwatchRec(s[id]); return s; } catch { return {}; } };
@@ -259,23 +278,32 @@ function saveCurrentSwatch() {
   const g = gatherGauges();   // studio inputs: { rib, hdc, sc }
   const ribEl = $("ribStyle");
   const post = !!ribEl && ribEl.value === "post";
-  const gauges = { hdc: { ...g.hdc, worked: "round" }, sc: { ...g.sc, worked: "round" } };
-  gauges[post ? "ribPost" : "ribBlo"] = { ...g.rib, worked: post ? "round" : "flat" };
+  const measurements = [];
+  const add = (stitch, worked, src) => {
+    if (src && src.sts > 0 && src.width > 0) measurements.push({ stitch, worked, sts: src.sts, rows: src.rows, width: src.width, height: src.height });
+  };
+  add(post ? "ribPost" : "ribBlo", post ? "round" : "flat", g.rib);
+  add("hdc", "round", g.hdc);
+  add("sc", "round", g.sc);
   const s = loadSwatches();
-  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, gauges };
+  s["s" + Date.now().toString(36)] = { name, savedAt: Date.now(), unit, measurements };
   saveSwatches(s);
   populateSwatchSelect();
   $("status").textContent = `saved swatch “${name}”`;
 }
 
-const swMeasured = (g) => g && g.sts > 0 && g.width > 0;
+const swMeasured = (m) => m && m.sts > 0 && m.width > 0;
 
 function applySwatch(id) {
   const s = loadSwatches()[id];
-  if (!s) return [];
+  if (!s) return { stitches: [], grip: null };
   unit = s.unit || "cm";
   for (const b of $("unitSeg").children) b.classList.toggle("on", b.dataset.unit === unit);
-  const g = s.gauges || {};
+  const ms = s.measurements || [];
+  const pick = (stitch, preferWorked) => {
+    const cands = ms.filter((m) => m.stitch === stitch && swMeasured(m));
+    return cands.find((m) => m.worked === preferWorked) || cands[0] || null;
+  };
   const applied = [];
   const fill = (studioKey, src) => {
     const el = $(studioKey + "Sts");
@@ -284,32 +312,34 @@ function applySwatch(id) {
     $(studioKey + "W").value = src.width; $(studioKey + "H").value = src.height;
     applied.push(studioKey);
   };
-  // The studio uses a single `rib` gauge; pick the construction matching the
-  // project's Ribbing setting (post columns vs BLO), falling back to whichever
-  // was measured. hdc/sc map straight across.
-  const ribEl = $("ribStyle");
-  const preferPost = !!ribEl && ribEl.value === "post";
-  const ribG = preferPost
-    ? (swMeasured(g.ribPost) ? g.ribPost : g.ribBlo)
-    : (swMeasured(g.ribBlo) ? g.ribBlo : g.ribPost);
-  fill("rib", ribG);
-  fill("hdc", g.hdc);
-  fill("sc", g.sc);
-  return applied;   // studio stitches filled — so callers can report what changed (mixing across yarns)
+  // The studio uses one `rib` gauge; pick the construction matching the project's
+  // Ribbing setting (post → post rib, else BLO), falling back to whichever exists.
+  const post = !!$("ribStyle") && $("ribStyle").value === "post";
+  const ribMeas = post ? pick("ribPost", "round") : pick("ribBlo", "flat");
+  fill("rib", ribMeas);
+  fill("hdc", pick("hdc", "round"));
+  fill("sc", pick("sc", "round"));
+  // If the rib measurement recorded a stretched size, auto-set the waistband grip.
+  let grip = null;
+  if (ribMeas) {
+    const f = measStretchFactor(ribMeas);
+    const be = $("bandEase");
+    if (f > 1.001 && be) { be.value = suggestGripValue(f); grip = suggestGripLabel(f); }
+  }
+  return { stitches: applied, grip };
 }
 
-// which swatch stitches were actually measured (for the dropdown's "covers…" hint)
+// measurements that were actually filled in (for the dropdown's "covers…" hint)
 function swatchStitches(rec) {
-  return SW_STITCHES.filter((k) => swMeasured(rec.gauges && rec.gauges[k]));
+  return (rec.measurements || []).filter(swMeasured);
 }
 
-// dropdown label: name — yarn, hook · stitches it covers (so you can tell swatches
-// apart by yarn/hook, and see which stitches loading it will change)
+// dropdown label: name — yarn, hook · how many measurements it carries
 function swatchLabel(rec) {
   const y = rec.yarn || {};
   const desc = [(y.line || y.brand || "").trim(), (y.hook || "").trim()].filter(Boolean).join(", ");
-  const covered = swatchStitches(rec).map((k) => SW_STITCH_LABEL[k]);
-  const tail = [desc, covered.length ? covered.join("/") : ""].filter(Boolean).join(" · ");
+  const n = swatchStitches(rec).length;
+  const tail = [desc, n ? n + " measurement" + (n !== 1 ? "s" : "") : ""].filter(Boolean).join(" · ");
   return rec.name + (tail ? " — " + tail : "");
 }
 
@@ -336,14 +366,15 @@ function renderSwatches() {
   const ids = Object.keys(sw).sort((a, b) => sw[b].savedAt - sw[a].savedAt);
   const cards = ids.length ? ids.map((id) => {
     const s = sw[id], u = s.unit || "cm";
-    const dens = SW_STITCHES.map((k) => {
-      const g = s.gauges && s.gauges[k];
-      const d = densityIn(g, u);
-      if (!d) return "";   // only show rib constructions / stitches actually measured
-      const w = (g && g.worked) || SW_REC[k];
-      const tag = ` <em title="worked ${SW_WORKED_LABEL[w]}" style="font-style:normal;color:var(--ink-soft)">${w === "round" ? "↻" : "⇄"}</em>`;
-      return `<span class="sd"><b>${SW_STITCH_LABEL[k]}</b>${d.st + " × " + d.row}${tag}</span>`;
-    }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no gauges measured</span>`;
+    const dens = (s.measurements || []).map((m) => {
+      const d = densityIn(m, u);
+      if (!d) return "";
+      const icon = m.worked === "round" ? "↻" : "⇄";
+      const f = measStretchFactor(m);
+      const stretch = f > 1.001 ? ` <span style="color:var(--clay)">+${Math.round((f - 1) * 100)}%</span>` : "";
+      const lbl = (SW_STITCH_LABEL[m.stitch] || m.stitch) + " " + (m.worked === "round" ? "↻" : "⇄");
+      return `<span class="sd" title="worked ${SW_WORKED_LABEL[m.worked]}"><b>${lbl}</b>${d.st + " × " + d.row}${stretch}</span>`;
+    }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no measurements</span>`;
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
     const colour = (y.colorway || "").trim();
@@ -413,23 +444,35 @@ function importSwatchFile(e) {
 
 /* ---------- swatch tool (dedicated tab) ---------- */
 
-// The swatch tool tracks TWO rib constructions independently (they're different
-// stitches with different gauge): back-loop-only (ribBlo) and post-stitch columns
-// (ribPost). Each can be worked flat OR in the round. The studio/engine still use a
-// single `rib` gauge per project (you pick one Ribbing style), so applySwatch maps
-// whichever rib construction matches the studio's Ribbing setting onto that slot.
-const SW_STITCHES = ["ribBlo", "ribPost", "hdc", "sc"];
+// A swatch profile (one yarn + hook) holds a LIST of measurements. Each measurement
+// is a stitch type × construction (flat / in the round) — so flat and round of the
+// same stitch are separate entries and you can mix them freely on one profile. You
+// add only the ones you swatched (via the "+ Add" menu), so it never crowds. Each
+// records a RELAXED gauge and an optional STRETCHED size (for stretchy stitches).
 const SW_STITCH_LABEL = { ribBlo: "BLO rib", ribPost: "Post rib", hdc: "Hdc", sc: "Sc" };
-let swUnit = "cm", swEditId = null, curSwStitch = "ribBlo";
-const SW_REC = { ribBlo: "flat", ribPost: "round", hdc: "round", sc: "round" };   // the usual way each is worked
 const SW_WORKED_LABEL = { flat: "flat", round: "in the round" };
-let swWorked = { ...SW_REC };
-const SW_GAUGE_IDS = {
-  ribBlo: ["swRibBloSts", "swRibBloRows", "swRibBloW", "swRibBloH"],
-  ribPost: ["swRibPostSts", "swRibPostRows", "swRibPostW", "swRibPostH"],
-  hdc: ["swHdcSts", "swHdcRows", "swHdcW", "swHdcH"],
-  sc: ["swScSts", "swScRows", "swScW", "swScH"],
-};
+const SW_TYPES = [
+  { key: "ribBlo-flat",   stitch: "ribBlo",  worked: "flat",  stretchy: true },
+  { key: "ribBlo-round",  stitch: "ribBlo",  worked: "round", stretchy: true },
+  { key: "ribPost-round", stitch: "ribPost", worked: "round", stretchy: true },
+  { key: "ribPost-flat",  stitch: "ribPost", worked: "flat",  stretchy: true },
+  { key: "hdc-round",     stitch: "hdc",     worked: "round" },
+  { key: "hdc-flat",      stitch: "hdc",     worked: "flat"  },
+  { key: "sc-round",      stitch: "sc",      worked: "round" },
+  { key: "sc-flat",       stitch: "sc",      worked: "flat"  },
+];
+const SW_TYPE_BY_KEY = {};
+for (const t of SW_TYPES) SW_TYPE_BY_KEY[t.key] = t;
+const measKey = (m) => m.stitch + "-" + m.worked;
+const measTypeLabel = (t) => SW_STITCH_LABEL[t.stitch] + " · " + SW_WORKED_LABEL[t.worked];
+function swInstrFor(stitch, worked) {
+  const e = SWATCH_INSTR[stitch];
+  return typeof e === "string" ? e : (e[worked] || e.flat || e.round);
+}
+// stretch factor → suggested waistband grip (a bandEase select value / label)
+function suggestGripValue(f) { return f >= 1.6 ? "-0.20" : f >= 1.4 ? "-0.16" : f >= 1.2 ? "-0.12" : "-0.08"; }
+function suggestGripLabel(f) { return f >= 1.6 ? "very snug" : f >= 1.4 ? "snug" : f >= 1.2 ? "standard" : "light"; }
+let swUnit = "cm", swEditId = null, swMeas = {};   // swMeas: key -> {sts,rows,width,height,stretchW,stretchH}
 const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
 const SWATCH_INSTR = {
   ribBlo: {
@@ -509,50 +552,69 @@ const SWATCH_INSTR = {
     <p>Rest it, then tag it <b>in the round</b> (or <b>flat</b> if you took the shortcut).</p></div>`,
 };
 
-function swSetStitch(st) {
-  curSwStitch = st;
-  for (const b of $("swStitchSeg").children) b.classList.toggle("on", b.dataset.st === st);
-  renderSwInstr();
-  for (const b of $("swWorkedSeg").children) b.classList.toggle("on", b.dataset.w === swWorked[st]);
-  updateSwWorkedNote();
+// stretch factor along the swatch's around-axis (rows for flat rib, sts for round)
+function measStretchFactor(m) {
+  const wF = (m.stretchW > 0 && m.width > 0) ? m.stretchW / m.width : 0;
+  const hF = (m.stretchH > 0 && m.height > 0) ? m.stretchH / m.height : 0;
+  return Math.max(wF, hF);
 }
 
-function renderSwInstr() {
-  const e = SWATCH_INSTR[curSwStitch];
-  $("swInstr").innerHTML = typeof e === "string" ? e : (e[swWorked[curSwStitch]] || e.flat || e.round);
-}
-
-function updateSwWorkedNote() {
-  const st = curSwStitch, w = swWorked[st], rec = SW_REC[st];
-  if (st === "ribBlo" || st === "ribPost") {
-    const which = st === "ribBlo" ? "back-loop-only (BLO)" : "post-stitch column (fpdc/bpdc)";
-    const usual = st === "ribBlo" ? "the default sideways band is worked flat" : "the pattern's in-the-round option is worked in the round";
-    $("swWorkedNote").innerHTML = `<b>${which}</b> rib, worked <b>${SW_WORKED_LABEL[w]}</b>. Both flat and in-the-round are valid — record it the way you'll actually make it (${usual}). Keep BLO and post rib as separate swatches; the studio uses whichever matches your <b>Ribbing</b> setting.`;
-    return;
+function measDerivedHtml(key) {
+  const m = swMeas[key]; if (!m) return "";
+  const t = SW_TYPE_BY_KEY[key];
+  const d = densityIn({ sts: m.sts, rows: m.rows, width: m.width, height: m.height }, swUnit);
+  let s = d ? `≈ <b>${d.st}×${d.row}</b> st×row per ${swUnit}` : `<span style="opacity:.65">enter sts + width for density</span>`;
+  const f = measStretchFactor(m);
+  if (f > 1.001) {
+    s += ` · stretches <b>+${Math.round((f - 1) * 100)}%</b>`;
+    if (t.stretchy) s += ` → suggests a <b>${suggestGripLabel(f)}</b> waistband grip`;
   }
-  $("swWorkedNote").innerHTML = w === rec
-    ? `✓ Matches how <b>${SW_STITCH_LABEL[st]}</b> is worked in the patterns (${SW_WORKED_LABEL[rec]}).`
-    : `⚠ <b>${SW_STITCH_LABEL[st]}</b> is worked <b>${SW_WORKED_LABEL[rec]}</b> in the patterns — a swatch worked ${SW_WORKED_LABEL[w]} can read slightly off. Best to swatch it ${SW_WORKED_LABEL[rec]}.`;
+  return s;
 }
 
-function updateSwDerived() {
-  const parts = SW_STITCHES.map((k) => {
-    const [s, r, w, h] = SW_GAUGE_IDS[k];
-    const g = { sts: parseFloat($(s).value), rows: parseFloat($(r).value), width: parseFloat($(w).value), height: parseFloat($(h).value) };
-    const d = densityIn(g, swUnit);
-    return d ? `<b>${SW_STITCH_LABEL[k]}</b> ${d.st}×${d.row}` : "";
-  }).filter(Boolean).join(" · ");
-  $("swDerived").innerHTML = parts ? `≈ ${parts} <span style="opacity:.7">st×row per ${swUnit}</span>` : "";
+function measCardHtml(key) {
+  const m = swMeas[key], t = SW_TYPE_BY_KEY[key];
+  const v = (x) => (x > 0 ? x : "");
+  const inp = (f, step, ph) => `<input type="number" step="${step}" data-k="${key}" data-f="${f}" value="${v(m[f])}"${ph ? ` placeholder="${ph}"` : ""}>`;
+  return `<div class="swmeas" data-k="${key}">
+    <div class="swmtop"><b>${measTypeLabel(t)}</b><button class="x" data-rm="${key}" title="Remove">✕</button></div>
+    <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
+    <div class="gauge"><div class="gl">Relaxed</div>${inp("sts", "0.5")}${inp("rows", "0.5")}${inp("width", "0.1")}${inp("height", "0.1")}</div>
+    <div class="gauge"><div class="gl" style="opacity:.75">Stretched</div><div></div><div></div>${inp("stretchW", "0.1", "W")}${inp("stretchH", "0.1", "H")}</div>
+    <div class="gnote" style="margin:1px 0 4px">Optional — pull it firmly (comfortable max) and note the new W × H.${t.stretchy ? " Recommended for rib." : ""}</div>
+    <div class="swderiv gnote" data-d="${key}">${measDerivedHtml(key)}</div>
+    <details class="refbox" style="margin-top:8px"><summary>How to swatch this</summary>${swInstrFor(t.stitch, t.worked)}</details>
+  </div>`;
 }
+
+function renderSwAddOptions() {
+  const sel = $("swAddType");
+  const avail = SW_TYPES.filter((t) => !swMeas[t.key]);
+  sel.innerHTML = `<option value="">＋ Add a swatch measurement…</option>` +
+    avail.map((t) => `<option value="${t.key}">${measTypeLabel(t)}</option>`).join("");
+  sel.disabled = avail.length === 0;
+}
+
+function renderSwMeas() {
+  const keys = SW_TYPES.map((t) => t.key).filter((k) => swMeas[k]);
+  $("swMeas").innerHTML = keys.length ? keys.map(measCardHtml).join("")
+    : `<div class="empty">No measurements yet — use “Add a swatch measurement” above.</div>`;
+  renderSwAddOptions();
+}
+
+function addMeas(key) {
+  if (!SW_TYPE_BY_KEY[key] || swMeas[key]) return;
+  swMeas[key] = { sts: 0, rows: 0, width: 0, height: 0, stretchW: 0, stretchH: 0 };
+  renderSwMeas();
+}
+function removeMeas(key) { delete swMeas[key]; renderSwMeas(); }
 
 function clearSwatchForm() {
-  $("swName").value = "";
-  $("swNotes").value = "";
+  $("swName").value = ""; $("swNotes").value = "";
   for (const id of SW_YARN) $(id).value = "";
-  for (const k of SW_STITCHES) for (const id of SW_GAUGE_IDS[k]) $(id).value = "";
-  swUnit = unit;
-  swWorked = { ...SW_REC };
+  swUnit = unit; swMeas = {};
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
+  renderSwMeas();
 }
 
 function loadSwatchForm(rec) {
@@ -563,29 +625,30 @@ function loadSwatchForm(rec) {
   $("swNotes").value = rec.notes || "";
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
-  swWorked = { ...SW_REC };
-  for (const k of SW_STITCHES) {
-    const g = (rec.gauges && rec.gauges[k]) || {};
-    const [s, r, w, h] = SW_GAUGE_IDS[k];
-    $(s).value = g.sts > 0 ? g.sts : ""; $(r).value = g.rows > 0 ? g.rows : "";
-    $(w).value = g.width > 0 ? g.width : ""; $(h).value = g.height > 0 ? g.height : "";
-    if (g.worked) swWorked[k] = g.worked;
+  swMeas = {};
+  for (const m of rec.measurements || []) {
+    const key = measKey(m);
+    if (!SW_TYPE_BY_KEY[key]) continue;
+    swMeas[key] = { sts: m.sts || 0, rows: m.rows || 0, width: m.width || 0, height: m.height || 0, stretchW: m.stretchW || 0, stretchH: m.stretchH || 0 };
   }
+  renderSwMeas();
 }
 
 function gatherSwatchRecord() {
-  const num = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
-  const gauges = {};
-  for (const k of SW_STITCHES) {
-    const [s, r, w, h] = SW_GAUGE_IDS[k];
-    gauges[k] = { sts: num(s), rows: num(r), width: num(w), height: num(h), worked: swWorked[k] };
-  }
+  const measurements = SW_TYPES.filter((t) => { const m = swMeas[t.key]; return m && m.sts > 0 && m.width > 0; })
+    .map((t) => {
+      const m = swMeas[t.key];
+      const out = { stitch: t.stitch, worked: t.worked, sts: m.sts, rows: m.rows, width: m.width, height: m.height };
+      if (m.stretchW > 0) out.stretchW = m.stretchW;
+      if (m.stretchH > 0) out.stretchH = m.stretchH;
+      return out;
+    });
   return {
     name: ($("swName").value || "").trim(),
     unit: swUnit,
     yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorway: $("swColorway").value.trim() },
     notes: ($("swNotes").value || "").trim(),
-    gauges,
+    measurements,
   };
 }
 
@@ -595,8 +658,6 @@ function openSwatch(id, setHash = true) {
   const rec = id ? loadSwatches()[id] : null;
   if (rec) { loadSwatchForm(rec); $("swTitle").textContent = "Edit swatch"; }
   else { clearSwatchForm(); $("swTitle").textContent = "New gauge swatch"; }
-  swSetStitch(curSwStitch);
-  updateSwDerived();
   if (setHash) location.hash = id ? "#/swatch/" + id : "#/swatch";
 }
 
@@ -795,7 +856,23 @@ function wire() {
     el.addEventListener("input", scheduleGenerate);
     el.addEventListener("change", scheduleGenerate);
   });
-  $("swatchView").addEventListener("input", updateSwDerived);
+  // swatch measurements: live-update state + derived readout as you type
+  $("swMeas").addEventListener("input", (e) => {
+    const el = e.target.closest("input[data-k]");
+    if (!el) return;
+    const k = el.dataset.k, f = el.dataset.f, v = parseFloat(el.value);
+    if (!swMeas[k]) return;
+    swMeas[k][f] = isNaN(v) ? 0 : v;
+    const d = $("swMeas").querySelector(`[data-d="${k}"]`);
+    if (d) d.innerHTML = measDerivedHtml(k);
+  });
+  $("swMeas").addEventListener("click", (e) => {
+    const rm = e.target.closest("[data-rm]");
+    if (rm) removeMeas(rm.dataset.rm);
+  });
+  $("swAddType").addEventListener("change", (e) => {
+    if (e.target.value) { addMeas(e.target.value); e.target.value = ""; }
+  });
 
   // unit toggle converts the numeric fields so 92cm becomes 36.2in
   for (const btn of $("unitSeg").children) {
@@ -854,10 +931,10 @@ function wire() {
   $("useSwatch").addEventListener("change", (e) => {
     if (!e.target.value) return;
     const rec = loadSwatches()[e.target.value];
-    const applied = applySwatch(e.target.value);
+    const res = applySwatch(e.target.value);
     e.target.value = "";
-    if (rec) pendingStatus = applied.length
-      ? `loaded ${applied.join(", ")} gauge from “${rec.name}” (other stitches unchanged)`
+    if (rec) pendingStatus = res.stitches.length
+      ? `loaded ${res.stitches.join(", ")} gauge from “${rec.name}”${res.grip ? ` · set ${res.grip} waistband grip` : ""} (other stitches unchanged)`
       : `“${rec.name}” has no measured gauges yet`;
     clearTimeout(debounceTimer);   // supersede the debounced generate the select change queued
     generate();
@@ -879,22 +956,17 @@ function wire() {
     if (e.target.id === "swImportFile") importSwatchFile(e);
   });
 
-  // swatch tool
-  for (const b of $("swStitchSeg").children) b.addEventListener("click", () => swSetStitch(b.dataset.st));
-  for (const b of $("swWorkedSeg").children) b.addEventListener("click", () => {
-    swWorked[curSwStitch] = b.dataset.w;
-    for (const x of $("swWorkedSeg").children) x.classList.toggle("on", x.dataset.w === b.dataset.w);
-    renderSwInstr();
-    updateSwWorkedNote();
-  });
+  // swatch tool — unit toggle converts every measurement's lengths (W/H, stretched)
   for (const btn of $("swUnitSeg").children) {
     btn.addEventListener("click", () => {
       const next = btn.dataset.unit;
       if (next === swUnit) return;
       const f = next === "in" ? (v) => v / 2.54 : (v) => v * 2.54;
-      for (const k of SW_STITCHES) { const ids = SW_GAUGE_IDS[k]; for (const id of [ids[2], ids[3]]) { const v = parseFloat($(id).value); if (!isNaN(v)) $(id).value = Math.round(f(v) * 10) / 10; } }
+      for (const k in swMeas) for (const dim of ["width", "height", "stretchW", "stretchH"]) {
+        if (swMeas[k][dim] > 0) swMeas[k][dim] = Math.round(f(swMeas[k][dim]) * 10) / 10;
+      }
       for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === next);
-      swUnit = next; updateSwDerived();
+      swUnit = next; renderSwMeas();
     });
   }
   $("swSaveBtn").addEventListener("click", () => saveSwatchFromTool(false));

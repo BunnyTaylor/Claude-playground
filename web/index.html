@@ -217,6 +217,15 @@
             <option value="post">In the round · fpdc/bpdc rib</option>
           </select>
         </div>
+        <div class="field"><label>Waistband grip <span class="hint">how much smaller than your waist the relaxed band is — stretchier rib needs more</span></label>
+          <select id="bandEase">
+            <option value="auto" selected>Auto (by rib style)</option>
+            <option value="-0.08">Light (−8%)</option>
+            <option value="-0.12">Standard (−12%)</option>
+            <option value="-0.16">Snug (−16%)</option>
+            <option value="-0.20">Very snug (−20%)</option>
+          </select>
+        </div>
 
         <div class="group-label">Silhouette</div>
         <div class="two">
@@ -285,22 +294,6 @@
         <div class="group-label">Units</div>
         <div class="seg" id="swUnitSeg"><button data-unit="cm" class="on">cm</button><button data-unit="in">inches</button></div>
 
-        <div class="group-label">Measured gauge <span class="hint" style="font-weight:400">(fill the ones you swatched)</span></div>
-        <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
-        <div class="gauge"><div class="gl">BLO rib</div>
-          <input type="number" id="swRibBloSts" step="0.5"><input type="number" id="swRibBloRows" step="0.5">
-          <input type="number" id="swRibBloW" step="0.1"><input type="number" id="swRibBloH" step="0.1"></div>
-        <div class="gauge"><div class="gl">Post rib</div>
-          <input type="number" id="swRibPostSts" step="0.5"><input type="number" id="swRibPostRows" step="0.5">
-          <input type="number" id="swRibPostW" step="0.1"><input type="number" id="swRibPostH" step="0.1"></div>
-        <div class="gauge"><div class="gl">Hdc</div>
-          <input type="number" id="swHdcSts" step="0.5"><input type="number" id="swHdcRows" step="0.5">
-          <input type="number" id="swHdcW" step="0.1"><input type="number" id="swHdcH" step="0.1"></div>
-        <div class="gauge"><div class="gl">Sc</div>
-          <input type="number" id="swScSts" step="0.5"><input type="number" id="swScRows" step="0.5">
-          <input type="number" id="swScW" step="0.1"><input type="number" id="swScH" step="0.1"></div>
-        <div id="swDerived" class="gnote"></div>
-
         <div class="group-label">Notes <span class="hint" style="font-weight:400">(optional — blocking, wash behaviour, tension…)</span></div>
         <div class="field"><textarea id="swNotes" rows="2" placeholder="e.g. blocked &amp; steamed; relaxes ~5% after wash" style="width:100%;font:inherit;padding:8px;box-sizing:border-box;resize:vertical"></textarea></div>
 
@@ -311,22 +304,14 @@
       </div>
     </div>
     <div class="col-out">
-      <div class="group-label" style="margin-top:0">How to swatch</div>
-      <div class="seg" id="swStitchSeg">
-        <button data-st="ribBlo" class="on">BLO rib</button>
-        <button data-st="ribPost">Post rib</button>
-        <button data-st="hdc">Hdc</button>
-        <button data-st="sc">Sc</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
-        <span style="font-size:12.5px;font-weight:700">Worked</span>
-        <div class="seg" id="swWorkedSeg">
-          <button data-w="flat">Flat</button>
-          <button data-w="round">In the round</button>
+      <div class="panel">
+        <h2 style="font-size:17px;margin:0 0 3px">Measurements</h2>
+        <p class="sub">Add each stitch you swatched — flat and in-the-round count as separate measurements. Record it <b>relaxed</b>; for stretchy stitches (rib) also stretch it firmly and note the stretched size.</p>
+        <div class="field">
+          <select id="swAddType"><option value="">＋ Add a swatch measurement…</option></select>
         </div>
+        <div id="swMeas"></div>
       </div>
-      <div id="swWorkedNote" class="gnote" style="margin-top:6px"></div>
-      <div class="refbox" id="swInstr" style="margin-top:12px"></div>
     </div>
   </div>
 </div>
