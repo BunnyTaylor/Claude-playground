@@ -132,8 +132,8 @@ test("evenAdjust consumes and produces exact counts", () => {
       const [bc, bp] = sumBody(m[1]);
       c += bc * reps; p += bp * reps;
     }
-    assert.ok(matched, "recognised shape: " + str);
-    const rest = str.slice(end).replace(/^,\s*/, "").trim();   // e.g. a decrease tail run
+    // no "*...; rep" block at all → a coprime Bresenham list; parse the whole string
+    const rest = (matched ? str.slice(end).replace(/^,\s*/, "") : str).trim();
     if (rest) for (const t of splitTop(rest)) { const [sc, sp] = sumItem(t); c += sc; p += sp; }
     return [c, p];
   };

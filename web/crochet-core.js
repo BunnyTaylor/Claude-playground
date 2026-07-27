@@ -95,11 +95,12 @@ var CrochetCore = (function () {
     // Distribute the increases as evenly as possible AROUND the round, not front-
     // loaded. Split the round into `groups` (one per minority stitch — the increases,
     // or the plain sts when near-doubling) and share the majority stitches so group
-    // sizes differ by at most one: `rr` "large" groups (q+1 majority) and the rest
-    // "small" (q majority). Rather than dumping every large group at the start, we
-    // factor out gcd(large, small) equal arcs and repeat one arc around the round, so
-    // the denser groups recur at evenly-spaced points. (gcd 1 → can't split evenly
-    // while staying a short repeat, so fall back to two blocks.)
+    // sizes differ by at most one: `big` "large" groups (q+1 majority) and `small`
+    // "small" (q majority). gcd(big, small) equals gcd(frm, inc): the number of
+    // identical arcs the round splits into. When that gcd > 1 we repeat one arc
+    // around the round so the denser groups recur at evenly-spaced points; when it is
+    // 1 (frm and inc coprime — no exact repeat exists) we Bresenham-interleave the
+    // large and small groups instead of front-loading them.
     var doubles = inc, singles = frm - inc;
     var majDouble = doubles > singles;                 // which stitch repeats within a group
     var majCount = majDouble ? doubles : singles;
@@ -110,16 +111,44 @@ var CrochetCore = (function () {
       var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
       return majPart + ", " + div + " in next st";
     };
+    var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
     var block = function (k, n) { return "*" + body(k) + "; rep from * " + n + " times"; };
     var big = rr, small = groups - rr;
     if (big === 0) return block(q, small);             // all groups uniform (q majority)
     if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
-    var g = gcdInt(big, small);
-    if (g === 1) {                                     // coprime → two blocks (large first)
-      return block(q + 1, big) + ", " + block(q, small);
+    var g = gcdInt(big, small);                        // = gcd(frm, inc): number of even arcs
+    if (g === 1) {
+      // Coprime — no exact even *repeat* exists. Place the `big` large (q+1) groups
+      // evenly among the `groups` slots (Bresenham), then run-length encode equal
+      // runs so the extra-stitch groups are spread around the round, not clustered.
+      var runs = [], acc = 0;
+      for (var i2 = 0; i2 < groups; i2++) {
+        var nb = Math.floor((i2 + 1) * big / groups);
+        var k2 = (nb !== acc) ? q + 1 : q;             // this slot takes one of the large groups
+        acc = nb;
+        var lastR = runs[runs.length - 1];
+        if (lastR && lastR.k === k2) lastR.n++; else runs.push({ k: k2, n: 1 });
+      }
+      // The exact Bresenham list grows with min(big,small) — fine when one group
+      // type is rare (a stitch sprinkled in here and there), unreadable when the two
+      // are balanced. Use it while it stays short (counting real top-level chunks, so
+      // a bare "a, b" group counts as its two commas); otherwise fall back to two
+      // even halves so the increases still span the round instead of front-loading.
+      var bres = runs.map(function (r2) { return seg(r2.k, r2.n); }).join(", ");
+      var depth = 0, chunks = 1;
+      for (var ci = 0; ci < bres.length; ci++) {
+        var cc = bres[ci];
+        if (cc === "(") depth++; else if (cc === ")") depth--;
+        else if (depth === 0 && cc === "," && bres[ci + 1] === " ") chunks++;
+      }
+      if (chunks <= 9) return bres;
+      var bigA = Math.ceil(big / 2), smA = Math.ceil(small / 2);
+      var half = [];
+      if (bigA) half.push(seg(q + 1, bigA)); if (smA) half.push(seg(q, smA));
+      if (big - bigA) half.push(seg(q + 1, big - bigA)); if (small - smA) half.push(seg(q, small - smA));
+      return half.join(", ");
     }
     // g equal arcs: each arc has big/g large groups then small/g small groups.
-    var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
     return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
   }
 
