@@ -127,29 +127,11 @@
           </div>
         </div>
 
-        <div class="group-label">Gauge <span class="hint" style="font-weight:400">(relaxed swatch: sts &amp; rows over W×H)</span></div>
-        <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
-        <div class="gauge">
-          <div class="gl">Rib</div>
-          <input type="number" id="ribSts" value="18" step="0.5"><input type="number" id="ribRows" value="9" step="0.5">
-          <input type="number" id="ribW" value="10" step="0.1"><input type="number" id="ribH" value="10" step="0.1">
-        </div>
-        <div class="gauge">
-          <div class="gl">Hdc</div>
-          <input type="number" id="hdcSts" value="14" step="0.5"><input type="number" id="hdcRows" value="11" step="0.5">
-          <input type="number" id="hdcW" value="10" step="0.1"><input type="number" id="hdcH" value="10" step="0.1">
-        </div>
-        <div class="gauge">
-          <div class="gl">Sc</div>
-          <input type="number" id="scSts" value="16" step="0.5"><input type="number" id="scRows" value="18" step="0.5">
-          <input type="number" id="scW" value="10" step="0.1"><input type="number" id="scH" value="10" step="0.1">
-        </div>
+        <div class="group-label">Gauge <span class="hint" style="font-weight:400">pick a saved swatch for each stitch</span></div>
+        <div class="field"><label>Rib <span class="hint">waistband &amp; cuffs</span></label><select id="gaugeSelRib"></select></div>
+        <div class="field"><label>Hdc <span class="hint">skirt / bag body</span></label><select id="gaugeSelHdc"></select></div>
+        <div class="field"><label>Sc <span class="hint">flounce / sleeves / hat</span></label><select id="gaugeSelSc"></select></div>
         <div id="gaugeDerived" class="gnote"></div>
-        <div class="two" style="margin-top:8px">
-          <input type="text" id="swatchName" placeholder="Swatch name (e.g. DK cotton 3.5mm)">
-          <button class="btn ghost sm" id="saveSwatchBtn">💾 Save swatch</button>
-        </div>
-        <select id="useSwatch"><option value="">Load a saved swatch…</option></select>
 
         <!-- HAT inputs -->
         <div id="hatInputs" hidden>
