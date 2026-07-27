@@ -33,24 +33,27 @@ var CrochetCore = (function () {
     return { st: g.sts / w, row: g.rows / h };
   }
 
-  function incPlan(start, target, totalRnds, stitch, setupRnds) {
+  function incPlan(start, target, totalRnds, stitch, setupRnds, chunkFrac) {
     if (setupRnds === undefined) setupRnds = 1;
     var total = target - start;
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
 
-    var chunk = Math.max(4, jsround(start * 0.08));
+    // chunk = how many sts to add per increase round. A smaller chunkFrac means
+    // more frequent, smaller increases (a smoother taper); default is ~8% of start.
+    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
     var n = Math.max(1, jsround(total / chunk));
     var usable = Math.max(1, totalRnds - setupRnds - 1);
     if (n > usable) n = usable;
 
-    var every = Math.max(1, Math.floor(usable / n));
     var per = Math.floor(total / n);
     var rem = total - per * n;
 
-    var cur = start;
+    var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      var add = per + (i === n ? rem : 0);
+      // spread the +1 remainder sts across the LAST `rem` rounds, not all in one,
+      // so no single increase round is noticeably bigger than the rest
+      var add = per + (i > n - rem ? 1 : 0);
       var before = cur;
       var interval = Math.floor(before / add);
       var tail = before - interval * add;
@@ -60,9 +63,15 @@ var CrochetCore = (function () {
           " in next st; rep from * " + add + " times" +
           (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
       cur += add;
-      out.rounds.push({ rnd: setupRnds + i * every, before: before, after: cur, add: add, text: text });
+      // distribute the increase ROUNDS evenly across the whole piece so the flare
+      // reaches the hem instead of finishing early and leaving a plain skirt bottom
+      var rnd = setupRnds + Math.round(i * usable / n);
+      if (rnd <= prevRnd) rnd = prevRnd + 1;
+      if (rnd > totalRnds) rnd = totalRnds;
+      prevRnd = rnd;
+      out.rounds.push({ rnd: rnd, before: before, after: cur, add: add, text: text });
     }
-    out.every = every;
+    out.every = Math.max(1, Math.round(usable / n));
     out.finalCount = cur;
     return out;
   }
@@ -212,7 +221,8 @@ var CrochetCore = (function () {
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
     var skStart = jsround(waist * hdc.st);
     var skJoin = evenAdjust(wbEdge, skStart, "hdc");
-    var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1);
+    // ~4.5% per increase round → smaller, more frequent increases for a smoother A-line
+    var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
     var wbEdgeLabel = ribStyle === "sideways" ? wbEdge + " row-ends" : wbEdge + " rib sts";
     if (hemSts <= skStart) warnings.push("Hem is no wider than the waist — raise fullness or check hdc gauge.");
     pieces.push({
