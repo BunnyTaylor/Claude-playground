@@ -107,7 +107,7 @@ test("evenAdjust consumes and produces exact counts", () => {
   // [consumed, produced] for one item: a leaf segment, or a "(<body>) N times"
   // group (recursively summed × N).
   const sumItem = (item) => {
-    const m = item.match(/^\((.+)\) (\d+) times$/);
+    const m = item.match(/^\((.+)\) (\d+) times?$/);
     if (m) { const [c, p] = sumBody(m[1]); return [c * +m[2], p * +m[2]]; }
     return seg(item);
   };

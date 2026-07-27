@@ -118,35 +118,39 @@ var CrochetCore = (function () {
     if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
     var g = gcdInt(big, small);                        // = gcd(frm, inc): number of even arcs
     if (g === 1) {
-      // Coprime — no exact even *repeat* exists. Place the `big` large (q+1) groups
-      // evenly among the `groups` slots (Bresenham), then run-length encode equal
-      // runs so the extra-stitch groups are spread around the round, not clustered.
-      var runs = [], acc = 0;
-      for (var i2 = 0; i2 < groups; i2++) {
-        var nb = Math.floor((i2 + 1) * big / groups);
-        var k2 = (nb !== acc) ? q + 1 : q;             // this slot takes one of the large groups
-        acc = nb;
-        var lastR = runs[runs.length - 1];
-        if (lastR && lastR.k === k2) lastR.n++; else runs.push({ k: k2, n: 1 });
+      // Coprime — no exact even *repeat* exists, so we spread as evenly as a readable
+      // instruction allows (budget: ~5 top-level sections).
+      var SECTIONS = 5;
+      var topChunks = function (s) {                    // top-level ", "-separated pieces
+        var d = 0, n = 1;
+        for (var i2 = 0; i2 < s.length; i2++) {
+          var c2 = s[i2];
+          if (c2 === "(") d++; else if (c2 === ")") d--;
+          else if (d === 0 && c2 === "," && s[i2 + 1] === " ") n++;
+        }
+        return n;
+      };
+      var mnN = Math.min(big, small), mxN = Math.max(big, small);
+      var mnBody = (big <= small) ? body(q + 1) : body(q);   // the rarer group type
+      var mxBody = (big <= small) ? body(q) : body(q + 1);
+      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE) —
+      //    ideal when one type is scarce (an extra stitch dropped in here and there).
+      var list = [], acc = 0;
+      for (var i3 = 0; i3 < groups; i3++) {
+        var nb = Math.floor((i3 + 1) * mnN / groups), h = nb !== acc; acc = nb;
+        var last = list[list.length - 1];
+        if (last && last.h === h) last.n++; else list.push({ h: h, n: 1 });
       }
-      // The exact Bresenham list grows with min(big,small) — fine when one group
-      // type is rare (a stitch sprinkled in here and there), unreadable when the two
-      // are balanced. Use it while it stays short (counting real top-level chunks, so
-      // a bare "a, b" group counts as its two commas); otherwise fall back to two
-      // even halves so the increases still span the round instead of front-loading.
-      var bres = runs.map(function (r2) { return seg(r2.k, r2.n); }).join(", ");
-      var depth = 0, chunks = 1;
-      for (var ci = 0; ci < bres.length; ci++) {
-        var cc = bres[ci];
-        if (cc === "(") depth++; else if (cc === ")") depth--;
-        else if (depth === 0 && cc === "," && bres[ci + 1] === " ") chunks++;
-      }
-      if (chunks <= 9) return bres;
-      var bigA = Math.ceil(big / 2), smA = Math.ceil(small / 2);
-      var half = [];
-      if (bigA) half.push(seg(q + 1, bigA)); if (smA) half.push(seg(q, smA));
-      if (big - bigA) half.push(seg(q + 1, big - bigA)); if (small - smA) half.push(seg(q, small - smA));
-      return half.join(", ");
+      var sprinkle = list.map(function (r2) { var b = r2.h ? mnBody : mxBody; return r2.n === 1 ? b : "(" + b + ") " + r2.n + " times"; }).join(", ");
+      if (topChunks(sprinkle) <= SECTIONS + 1) return sprinkle;
+      // 2) Balanced (both types plentiful): pair each rarer group with its share of
+      //    common groups into A = mnN equal-ish arcs, so large and small interleave
+      //    at the finest scale instead of front-loading. The arcs come in two sizes
+      //    (one extra common group in `extra` of them), written as two blocks.
+      var A = mnN, base = Math.floor(mxN / A), extra = mxN % A;
+      var arcOf = function (c) { var a = [mnBody]; for (var j = 0; j < c; j++) a.push(mxBody); return a.join(", "); };
+      var arcSeg = function (c, cnt) { return "(" + arcOf(c) + ") " + cnt + (cnt === 1 ? " time" : " times"); };
+      return arcSeg(base, A - extra) + ", " + arcSeg(base + 1, extra);
     }
     // g equal arcs: each arc has big/g large groups then small/g small groups.
     return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
