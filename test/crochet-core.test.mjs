@@ -15,9 +15,11 @@ const Core = require("../web/crochet-core.js");
 const Viz = require("../web/crochet-viz.js");
 
 const {
-  computePattern, computeHat, computeBag, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
+  computePattern, computeHat, computeBag, computeTights, decPlan, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
   spotChart, spotCharts, estimateYarn, convertTerms, density, even, mult, toCm, fromCm,
 } = Core;
+
+const tightsInput = () => { const i = defaultInput(); i.accessory = { thigh: 56, ankle: 24, inseam: 70, rise: 27 }; return i; };
 
 function walkProgressEnd(p) {
   let c = p.progress.start;
@@ -89,17 +91,50 @@ test("evenAdjust consumes and produces exact counts", () => {
     if (s === `${st}2tog`) return [2, 1];
     throw new Error("unparsed segment: " + s);
   };
+  // split a comma-separated body on ", " but only at paren depth 0, so nested
+  // "(...) N times" groups stay intact.
+  const splitTop = (body) => {
+    const out = []; let depth = 0, start = 0;
+    for (let i = 0; i < body.length; i++) {
+      const ch = body[i];
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (depth === 0 && ch === "," && body[i + 1] === " ") { out.push(body.slice(start, i)); i++; start = i + 1; }
+    }
+    out.push(body.slice(start));
+    return out;
+  };
+  // [consumed, produced] for one item: a leaf segment, or a "(<body>) N times"
+  // group (recursively summed × N).
+  const sumItem = (item) => {
+    const m = item.match(/^\((.+)\) (\d+) times?$/);
+    if (m) { const [c, p] = sumBody(m[1]); return [c * +m[2], p * +m[2]]; }
+    return seg(item);
+  };
+  const sumBody = (body) => {
+    let c = 0, p = 0;
+    for (const t of splitTop(body)) { const [sc, sp] = sumItem(t); c += sc; p += sp; }
+    return [c, p];
+  };
   // parse a full evenAdjust string → [consumed, produced], or null for the
-  // count-less forms (identity / more-than-doubling fallback)
+  // count-less forms (identity / more-than-doubling fallback). Handles one or
+  // more "*<body>; rep from * N times" blocks (body may contain nested groups)
+  // plus an optional trailing run.
   const parse = (str) => {
     if (str === `${st} in each st around`) return null;
     if (str.includes("evenly to")) return null;
-    const m = str.match(/^\*(.*); rep from \* (\d+) times(?:, (.*))?$/);
-    assert.ok(m, "recognised shape: " + str);
-    const body = m[1], reps = +m[2], tail = m[3];
-    let c = 0, p = 0;
-    for (const t of body.split(", ")) { const [sc, sp] = seg(t); c += sc * reps; p += sp * reps; }
-    if (tail) { const [sc, sp] = seg(tail); c += sc; p += sp; }
+    let c = 0, p = 0, matched = false, end = 0;
+    const re = /\*(.+?); rep from \* (\d+) times/g;
+    let m;
+    while ((m = re.exec(str))) {
+      matched = true; end = re.lastIndex;
+      const reps = +m[2];
+      const [bc, bp] = sumBody(m[1]);
+      c += bc * reps; p += bp * reps;
+    }
+    // no "*...; rep" block at all → a coprime Bresenham list; parse the whole string
+    const rest = (matched ? str.slice(end).replace(/^,\s*/, "") : str).trim();
+    if (rest) for (const t of splitTop(rest)) { const [sc, sp] = sumItem(t); c += sc; p += sp; }
     return [c, p];
   };
   for (let from = 20; from <= 400; from += 7) {
@@ -352,6 +387,28 @@ test("both rib modes keep every piece's progress end exact", () => {
 test("US terms is a no-op", () => {
   const res = computePattern(DEFAULT_INPUT);
   assert.equal(convertTerms(res, "US"), res);
+});
+
+test("tights produce a mycelium set tagged kind:tights", () => {
+  const r = computeTights(tightsInput());
+  assert.equal(r.meta.kind, "tights");
+  assert.deepEqual(r.pieces.map((p) => p.id), ["waistband", "yoke", "legs", "mycelium"].length ? ["waistband", "yoke", "legs", "cuffs", "mycelium"] : []);
+  // legs taper from thigh(+gusset) down to the ankle, exactly
+  const legs = r.pieces.find((p) => p.id === "legs");
+  assert.ok(legs.counts.start > legs.counts.end, "legs taper");
+  assert.equal(legs.progress.end, legs.counts.end);
+  // yoke grows waist → hip, exactly
+  const yoke = r.pieces.find((p) => p.id === "yoke");
+  assert.ok(yoke.counts.end >= yoke.counts.start);
+  assert.equal(estimateYarn(r).total.meters > 0, true);
+});
+
+test("decPlan reaches its target exactly and never past the end", () => {
+  for (let rounds = 6; rounds < 160; rounds += 9) {
+    const p = decPlan(120, 40, rounds, "sc", 1);
+    assert.equal(p.finalCount, 40, `dec ${rounds}`);
+    if (p.rounds.length) assert.ok(p.rounds[p.rounds.length - 1].rnd <= rounds);
+  }
 });
 
 /* ---------------- visualization ---------------- */

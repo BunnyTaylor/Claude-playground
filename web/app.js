@@ -14,7 +14,7 @@ let unit = "cm";
 let terms = "US";
 let curColl = Registry.collections[0];          // current collection
 let curGen = curColl.generators[0];             // current generator (dress/hat/bag/…)
-const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs"];
+const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs", "tightsInputs"];
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
 let pendingStatus = null;    // one-shot status message for the next generate() (survives the debounce)
@@ -25,7 +25,7 @@ let LAST = null;             // most recent /api/pattern response
 const GAUGES = ["rib", "hdc", "sc"];
 const GFIELDS = { Sts: "sts", Rows: "rows", W: "width", H: "height" };
 const BODY = ["bust", "waist", "upperBust", "hip", "upperArm", "wrist", "skirtLen", "sleeveLen"];
-const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen" };
+const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen", tWaist: "waist", tHip: "hip", thigh: "thigh", ankle: "ankle", inseam: "inseam", rise: "rise" };
 // measurement fields that must be numerically converted when the unit changes
 const CONVERT = [...BODY, ...Object.keys(ACC)];
 // The studio's active gauge now comes from picking saved swatches (per stitch),

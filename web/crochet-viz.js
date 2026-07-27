@@ -353,15 +353,85 @@ var CrochetViz = (function (Core) {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mushroom bucket bag">' + parts.join("") + "</svg>";
   }
 
+  // recursive branching mycelium vein, climbing upward (screen -y), forking
+  function myceliumBranch(parts, x, y, ang, len, w, depth, rng, pal) {
+    if (depth <= 0 || len < 7) return;
+    var ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len;
+    var mx = (x + ex) / 2 + (rng() - 0.5) * len * 0.5;
+    var my = (y + ey) / 2 + (rng() - 0.5) * len * 0.5;
+    parts.push('<path d="M ' + e(x) + ' ' + e(y) + ' Q ' + e(mx) + ' ' + e(my) + ' ' + e(ex) + ' ' + e(ey) + '" fill="none" stroke="' + pal.spot + '" stroke-width="' + e(Math.max(0.6, w)) + '" stroke-linecap="round" opacity="0.92"/>');
+    if (rng() < 0.35) parts.push('<circle cx="' + e(ex) + '" cy="' + e(ey) + '" r="' + e(Math.max(1, w * 0.9)) + '" fill="' + pal.spot + '" opacity="0.92"/>');
+    var forks = rng() < 0.65 ? 2 : 1;
+    for (var i = 0; i < forks; i++) {
+      myceliumBranch(parts, ex, ey, ang + (rng() - 0.5) * 1.0, len * (0.58 + rng() * 0.28), w * 0.72, depth - 1, rng, pal);
+    }
+  }
+
+  function renderTightsSvg(result, inp, palette, opts) {
+    opts = opts || {};
+    var width = opts.width || 360, height = opts.height || 580;
+    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var meta = result.meta, u = meta.unit;
+    var cx = width / 2;
+    var hipHalf = width * 0.30;
+    var waistHalf = hipHalf * (meta.waistCirc / Math.max(meta.hipCirc, 1));
+    var gap = width * 0.018;                               // crotch notch half-width
+    var thighHalf = (hipHalf - gap) / 2;                   // per leg
+    var ankleHalf = Math.max(width * 0.04, thighHalf * (meta.ankleCirc / Math.max(meta.thighCirc, 1)));
+    var scaleV = (height * 0.80) / Math.max(meta.rise + meta.inseam, 1);
+    var bandH = 18;
+    var yTop = 26, yYokeTop = yTop + bandH, yHip = yYokeTop + meta.rise * scaleV, yAnkle = yHip + meta.inseam * scaleV;
+    var rLegCx = cx + (gap + hipHalf) / 2, lLegCx = cx - (gap + hipHalf) / 2;
+    var parts = [];
+    parts.push('<rect width="' + width + '" height="' + height + '" fill="' + pal.bg + '"/>');
+
+    var yoke = "M " + e(cx - waistHalf) + " " + e(yYokeTop) + " L " + e(cx + waistHalf) + " " + e(yYokeTop) +
+      " L " + e(cx + hipHalf) + " " + e(yHip) + " L " + e(cx - hipHalf) + " " + e(yHip) + " Z";
+    var legPath = function (lc) {
+      return "M " + e(lc - thighHalf) + " " + e(yHip) + " L " + e(lc + thighHalf) + " " + e(yHip) +
+        " L " + e(lc + ankleHalf) + " " + e(yAnkle) + " L " + e(lc - ankleHalf) + " " + e(yAnkle) + " Z";
+    };
+    // clip everything (yoke + both legs) so veins stay on the garment
+    parts.push('<defs><clipPath id="tightsBody"><path d="' + yoke + '"/><path d="' + legPath(rLegCx) + '"/><path d="' + legPath(lLegCx) + '"/></clipPath></defs>');
+    // body fill
+    parts.push('<path d="' + yoke + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    parts.push('<path d="' + legPath(rLegCx) + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    parts.push('<path d="' + legPath(lLegCx) + '" fill="' + pal.cap + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    // mycelium veins, clipped to the garment
+    var rng = mulberry32(Math.round((meta.inseam + meta.hipCirc) * 97) >>> 0);
+    var veins = [];
+    [lLegCx, rLegCx].forEach(function (lc) {
+      var roots = 3;
+      for (var r = 0; r < roots; r++) {
+        var x = lc + (r - 1) * ankleHalf * 0.7 + (rng() - 0.5) * ankleHalf * 0.5;
+        myceliumBranch(veins, x, yAnkle - 6, -Math.PI / 2 + (rng() - 0.5) * 0.5, (yAnkle - yHip) * 0.30, 2.2, 5, rng, pal);
+      }
+    });
+    parts.push('<g clip-path="url(#tightsBody)">' + veins.join("") + '</g>');
+    // waistband on top
+    parts.push('<rect x="' + e(cx - waistHalf) + '" y="' + e(yTop) + '" width="' + e(2 * waistHalf) + '" height="' + bandH + '" rx="4" fill="' + pal.capDeep + '"/>');
+    for (var k = 0; k < Math.floor(2 * waistHalf / 6); k++) {
+      var rx = cx - waistHalf + 3 + k * 6;
+      parts.push('<line x1="' + e(rx) + '" y1="' + e(yTop + 2) + '" x2="' + e(rx) + '" y2="' + e(yTop + bandH - 2) + '" stroke="' + pal.cap + '" stroke-width="1" opacity="0.35"/>');
+    }
+    // ankle cuffs
+    [lLegCx, rLegCx].forEach(function (lc) {
+      parts.push('<rect x="' + e(lc - ankleHalf) + '" y="' + e(yAnkle - 8) + '" width="' + e(2 * ankleHalf) + '" height="10" rx="3" fill="' + pal.capDeep + '"/>');
+    });
+    parts.push('<text x="' + cx + '" y="' + (height - 14) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + CAPTION_INK + '">mycelium tights · waist ' + esc(fmt(meta.waistCirc, u)) + ' · inseam ' + esc(fmt(meta.inseam, u)) + '</text>');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mycelium tights">' + parts.join("") + "</svg>";
+  }
+
   // dispatcher by garment kind
   function render(result, inp, palette, opts) {
     var kind = result.meta && result.meta.kind;
     if (kind === "hat") return renderHatSvg(result, inp, palette, opts);
     if (kind === "bag") return renderBagSvg(result, inp, palette, opts);
+    if (kind === "tights") return renderTightsSvg(result, inp, palette, opts);
     return renderDressSvg(result, inp, palette, opts);
   }
 
-  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg, renderHatSvg: renderHatSvg, renderBagSvg: renderBagSvg, render: render };
+  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg, renderHatSvg: renderHatSvg, renderBagSvg: renderBagSvg, renderTightsSvg: renderTightsSvg, render: render };
 })(typeof CrochetCore !== "undefined" ? CrochetCore : require("./crochet-core.js"));
 
 if (typeof module !== "undefined" && module.exports) module.exports = CrochetViz;

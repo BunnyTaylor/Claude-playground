@@ -25,6 +25,7 @@ var CrochetCore = (function () {
 
   var even = function (n) { n = Math.trunc(n); return (n % 2) ? n + 1 : n; };
   var mult = function (n, m) { return Math.max(m, jsround(n / m) * m); };
+  var gcdInt = function (a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { var t = b; b = a % b; a = t; } return a; };
 
   function density(g, unit) {
     var w = toCm(g.width, unit), h = toCm(g.height, unit);
@@ -33,24 +34,27 @@ var CrochetCore = (function () {
     return { st: g.sts / w, row: g.rows / h };
   }
 
-  function incPlan(start, target, totalRnds, stitch, setupRnds) {
+  function incPlan(start, target, totalRnds, stitch, setupRnds, chunkFrac) {
     if (setupRnds === undefined) setupRnds = 1;
     var total = target - start;
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
 
-    var chunk = Math.max(4, jsround(start * 0.08));
+    // chunk = how many sts to add per increase round. A smaller chunkFrac means
+    // more frequent, smaller increases (a smoother taper); default is ~8% of start.
+    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
     var n = Math.max(1, jsround(total / chunk));
     var usable = Math.max(1, totalRnds - setupRnds - 1);
     if (n > usable) n = usable;
 
-    var every = Math.max(1, Math.floor(usable / n));
     var per = Math.floor(total / n);
     var rem = total - per * n;
 
-    var cur = start;
+    var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      var add = per + (i === n ? rem : 0);
+      // spread the +1 remainder sts across the LAST `rem` rounds, not all in one,
+      // so no single increase round is noticeably bigger than the rest
+      var add = per + (i > n - rem ? 1 : 0);
       var before = cur;
       var interval = Math.floor(before / add);
       var tail = before - interval * add;
@@ -60,9 +64,15 @@ var CrochetCore = (function () {
           " in next st; rep from * " + add + " times" +
           (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
       cur += add;
-      out.rounds.push({ rnd: setupRnds + i * every, before: before, after: cur, add: add, text: text });
+      // distribute the increase ROUNDS evenly across the whole piece so the flare
+      // reaches the hem instead of finishing early and leaving a plain skirt bottom
+      var rnd = setupRnds + Math.round(i * usable / n);
+      if (rnd <= prevRnd) rnd = prevRnd + 1;
+      if (rnd > totalRnds) rnd = totalRnds;
+      prevRnd = rnd;
+      out.rounds.push({ rnd: rnd, before: before, after: cur, add: add, text: text });
     }
-    out.every = every;
+    out.every = Math.max(1, Math.round(usable / n));
     out.finalCount = cur;
     return out;
   }
@@ -82,21 +92,68 @@ var CrochetCore = (function () {
     }
     var inc = to - frm;
     if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    // Distribute evenly by spreading whichever is the MINORITY — the increase
-    // stitches or the plain ones — so the shaping never bunches on one side.
+    // Distribute the increases as evenly as possible AROUND the round, not front-
+    // loaded. Split the round into `groups` (one per minority stitch — the increases,
+    // or the plain sts when near-doubling) and share the majority stitches so group
+    // sizes differ by at most one: `big` "large" groups (q+1 majority) and `small`
+    // "small" (q majority). gcd(big, small) equals gcd(frm, inc): the number of
+    // identical arcs the round splits into. When that gcd > 1 we repeat one arc
+    // around the round so the denser groups recur at evenly-spaced points; when it is
+    // 1 (frm and inc coprime — no exact repeat exists) we Bresenham-interleave the
+    // large and small groups instead of front-loading them.
     var doubles = inc, singles = frm - inc;
-    if (doubles <= singles) {                       // increases are the minority → space them out
-      var iv2 = Math.floor(frm / doubles);
-      var tail2 = frm - iv2 * doubles;
-      var lead2 = (iv2 - 1) > 0 ? stitch + " in each of next " + (iv2 - 1) + " sts, " : "";
-      return "*" + lead2 + "2 " + stitch + " in next st; rep from * " + doubles + " times" +
-        (tail2 > 0 ? ", " + stitch + " in each of last " + tail2 + " sts" : "");
+    var majDouble = doubles > singles;                 // which stitch repeats within a group
+    var majCount = majDouble ? doubles : singles;
+    var groups = majDouble ? singles : doubles;        // one minority ("divider") stitch per group
+    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr large groups, groups-rr small
+    var maj = majDouble ? "2 " + stitch : stitch, div = majDouble ? stitch : "2 " + stitch;
+    var body = function (k) {                          // one group: k majority sts, then 1 divider
+      var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
+      return majPart + ", " + div + " in next st";
+    };
+    var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
+    var block = function (k, n) { return "*" + body(k) + "; rep from * " + n + " times"; };
+    var big = rr, small = groups - rr;
+    if (big === 0) return block(q, small);             // all groups uniform (q majority)
+    if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
+    var g = gcdInt(big, small);                        // = gcd(frm, inc): number of even arcs
+    if (g === 1) {
+      // Coprime — no exact even *repeat* exists, so we spread as evenly as a readable
+      // instruction allows (budget: ~5 top-level sections).
+      var SECTIONS = 5;
+      var topChunks = function (s) {                    // top-level ", "-separated pieces
+        var d = 0, n = 1;
+        for (var i2 = 0; i2 < s.length; i2++) {
+          var c2 = s[i2];
+          if (c2 === "(") d++; else if (c2 === ")") d--;
+          else if (d === 0 && c2 === "," && s[i2 + 1] === " ") n++;
+        }
+        return n;
+      };
+      var mnN = Math.min(big, small), mxN = Math.max(big, small);
+      var mnBody = (big <= small) ? body(q + 1) : body(q);   // the rarer group type
+      var mxBody = (big <= small) ? body(q) : body(q + 1);
+      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE) —
+      //    ideal when one type is scarce (an extra stitch dropped in here and there).
+      var list = [], acc = 0;
+      for (var i3 = 0; i3 < groups; i3++) {
+        var nb = Math.floor((i3 + 1) * mnN / groups), h = nb !== acc; acc = nb;
+        var last = list[list.length - 1];
+        if (last && last.h === h) last.n++; else list.push({ h: h, n: 1 });
+      }
+      var sprinkle = list.map(function (r2) { var b = r2.h ? mnBody : mxBody; return r2.n === 1 ? b : "(" + b + ") " + r2.n + " times"; }).join(", ");
+      if (topChunks(sprinkle) <= SECTIONS + 1) return sprinkle;
+      // 2) Balanced (both types plentiful): pair each rarer group with its share of
+      //    common groups into A = mnN equal-ish arcs, so large and small interleave
+      //    at the finest scale instead of front-loading. The arcs come in two sizes
+      //    (one extra common group in `extra` of them), written as two blocks.
+      var A = mnN, base = Math.floor(mxN / A), extra = mxN % A;
+      var arcOf = function (c) { var a = [mnBody]; for (var j = 0; j < c; j++) a.push(mxBody); return a.join(", "); };
+      var arcSeg = function (c, cnt) { return "(" + arcOf(c) + ") " + cnt + (cnt === 1 ? " time" : " times"); };
+      return arcSeg(base, A - extra) + ", " + arcSeg(base + 1, extra);
     }
-    // plain stitches are the minority (near-doubling) → space the plain ones out
-    var ivs = Math.floor(frm / singles);
-    var tailD = frm - ivs * singles;
-    return "*2 " + stitch + " in each of next " + (ivs - 1) + " sts, " + stitch + " in next st; rep from * " +
-      singles + " times" + (tailD > 0 ? ", 2 " + stitch + " in each of last " + tailD + " sts" : "");
+    // g equal arcs: each arc has big/g large groups then small/g small groups.
+    return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {
@@ -208,7 +265,8 @@ var CrochetCore = (function () {
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
     var skStart = jsround(waist * hdc.st);
     var skJoin = evenAdjust(wbEdge, skStart, "hdc");
-    var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1);
+    // ~4.5% per increase round → smaller, more frequent increases for a smoother A-line
+    var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
     var wbEdgeLabel = ribStyle === "sideways" ? wbEdge + " row-ends" : wbEdge + " rib sts";
     if (hemSts <= skStart) warnings.push("Hem is no wider than the waist — raise fullness or check hdc gauge.");
     pieces.push({
@@ -612,6 +670,167 @@ var CrochetCore = (function () {
     };
   }
 
+  // decrease equivalent of incPlan (start > target): spreads decrease rounds
+  // evenly across the piece and uses evenAdjust for even shaping within a round.
+  function decPlan(start, target, totalRnds, stitch, setupRnds, chunkFrac) {
+    if (setupRnds === undefined) setupRnds = 1;
+    var total = start - target;
+    var out = { rounds: [], every: 0, finalCount: start };
+    if (total <= 0) return out;
+    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
+    var n = Math.max(1, jsround(total / chunk));
+    var usable = Math.max(1, totalRnds - setupRnds - 1);
+    if (n > usable) n = usable;
+    var per = Math.floor(total / n), rem = total - per * n;
+    var cur = start, prevRnd = setupRnds;
+    for (var i = 1; i <= n; i++) {
+      var sub = per + (i > n - rem ? 1 : 0);
+      var before = cur;
+      cur -= sub;
+      var rnd = setupRnds + Math.round(i * usable / n);
+      if (rnd <= prevRnd) rnd = prevRnd + 1;
+      if (rnd > totalRnds) rnd = totalRnds;
+      prevRnd = rnd;
+      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: evenAdjust(before, cur, stitch) });
+    }
+    out.every = Math.max(1, Math.round(usable / n));
+    out.finalCount = cur;
+    return out;
+  }
+
+  // ---- Matching mycelium TIGHTS (footless): rib waistband, sc hip yoke, two
+  // tapered legs, ankle cuffs, plus an embroidered mycelium web. Worked top-down. ----
+  function computeTights(input) {
+    input = input || {};
+    var u = input.unit || "cm";
+    var C = Object.assign({}, DEFAULT_INPUT.colors, input.colors || {});
+    var S = Object.assign({}, DEFAULT_INPUT.style, input.style || {});
+    var B = Object.assign({}, DEFAULT_INPUT.body, input.body || {});
+    var G = Object.assign({}, DEFAULT_INPUT.gauges, input.gauges || {});
+    var A = input.accessory || {};
+    var rib = density(G.rib, u), hdc = density(G.hdc, u), sc = density(G.sc, u);
+    var H = function (cm) { return r1(fromCm(cm, u)) + " " + u; };
+    var mapC = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
+
+    var waist = toCm(A.waist != null ? A.waist : B.waist, u);
+    var hip = toCm(A.hip != null ? A.hip : B.hip, u);
+    var thigh = toCm(A.thigh != null ? A.thigh : 56, u);
+    var ankle = toCm(A.ankle != null ? A.ankle : 24, u);
+    var inseam = toCm(A.inseam != null ? A.inseam : 70, u);
+    var rise = toCm(A.rise != null ? A.rise : 27, u);
+    var hug = 0.94;   // sc barely stretches — work ~6% under the body so tights hug
+
+    var warnings = [], pieces = [];
+
+    // 1. rib waistband (grip), same construction options as the dress
+    var ribStyle = S.ribStyle === "post" ? "post" : "sideways";
+    var bandEase = (S.bandEase != null) ? S.bandEase : (ribStyle === "sideways" ? -0.15 : (S.waistEase / Math.max(1, waist)));
+    var bandCirc = Math.max(20, waist * (1 + bandEase));
+    var bandEdge;
+    if (ribStyle === "sideways") {
+      var bandHeightSts = Math.max(6, jsround(6 * rib.st));
+      var bandRows = even(jsround(bandCirc * rib.row));
+      bandEdge = bandRows;
+      pieces.push({
+        id: "waistband", title: "Rib waistband", stitch: "sideways · back-loop rib, seamed",
+        counts: { sts: bandRows, heightSts: bandHeightSts, rowsAround: bandRows, circumference: bandCirc },
+        progress: { total: bandRows, start: bandHeightSts, end: bandHeightSts, incRounds: [] },
+        yarn: { g: "rib", color: "body" },
+        steps: [
+          ["Foundation", "In " + C.body + ", ch " + bandHeightSts + " (the band's height). Row 1: sc in 2nd ch from hook and each ch across."],
+          ["Rib rows", "Ch 1, turn, sc in back loop only across. Work " + bandRows + " rows — relaxed about " + H(bandCirc) + ", smaller than your " + H(waist) + " waist so it grips."],
+          ["Seam", "Join first and last rows into a ring. Fold double and leave a gap if you want to thread elastic."],
+        ],
+      });
+    } else {
+      var bandSts = even(jsround(bandCirc * rib.st));
+      var bandRnds = Math.max(4, jsround(6 * rib.row));
+      bandEdge = bandSts;
+      pieces.push({
+        id: "waistband", title: "Rib waistband", stitch: "in the round · fpdc/bpdc rib",
+        counts: { sts: bandSts, rounds: bandRnds, circumference: bandCirc },
+        progress: { total: bandRnds, start: bandSts, end: bandSts, incRounds: [] },
+        yarn: { g: "rib", color: "body" },
+        steps: [
+          ["Foundation (stretchy start)", "In " + C.body + ", work " + bandSts + " foundation sc and join into a ring, not twisting."],
+          ["Rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + bandRnds + ". (" + bandSts + " sts)"],
+        ],
+      });
+    }
+
+    // 2. hip yoke — waistband down to the crotch, waist → hip, sc in the round
+    var yokeTop = even(jsround(waist * sc.st * hug));
+    var yokeBot = even(jsround(hip * sc.st * hug));
+    var riseRnds = Math.max(6, jsround(rise * sc.row));
+    var yokeJoin = evenAdjust(bandEdge, yokeTop, "sc");
+    var yokePlan = incPlan(yokeTop, yokeBot, riseRnds, "sc", 1, 0.06);
+    pieces.push({
+      id: "yoke", title: "Hip yoke", stitch: "in the round, downward · sc",
+      counts: { start: yokeTop, end: yokePlan.finalCount, rounds: riseRnds, rise: rise },
+      progress: { total: riseRnds, start: yokeTop, end: yokePlan.finalCount, incRounds: mapC(yokePlan.rounds) },
+      yarn: { g: "sc", color: "cap" },
+      steps: [
+        ["Set-up", "In " + C.cap + ", join to the lower edge of the waistband. Ch 1, " + yokeJoin + ", join. (band → " + yokeTop + " sc)"],
+        ["Shape to the hip", "Work down toward the crotch over ~" + H(rise) + " (rise), increasing to " + yokePlan.finalCount + " sc at your hip."],
+      ].concat(yokePlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 1, " + x.text + ", join. (" + x.after + " sc)"]; }))
+        .concat([["Crotch", "Work plain to Rnd " + riseRnds + ", then divide for the two legs (next)."]]),
+    });
+
+    // 3. legs (make 2) — thigh → ankle taper, sc in the round
+    var gusset = Math.max(4, even(jsround(4 * sc.st)));
+    var legStart = even(jsround(thigh * sc.st * hug)) + gusset;
+    var legBot = even(jsround(ankle * sc.st * hug));
+    var legRnds = Math.max(8, jsround(inseam * sc.row));
+    var legPlan = decPlan(legStart, legBot, legRnds, "sc", 2, 0.045);
+    pieces.push({
+      id: "legs", title: "Legs (make 2)", stitch: "in the round, downward · sc", makeCount: 2,
+      counts: { start: legStart, end: legPlan.finalCount, rounds: legRnds, gusset: gusset },
+      progress: { total: legRnds, start: legStart, end: legPlan.finalCount, incRounds: mapC(legPlan.rounds) },
+      yarn: { g: "sc", color: "cap" },
+      steps: [
+        ["Divide", "At the crotch, put half the yoke sts on hold for the other leg. Rejoin " + C.cap + " around one leg and work " + gusset + " extra sc across the crotch gap — a small gusset for movement. (" + legStart + " sc)"],
+        ["Taper to the ankle", "Work down the leg over ~" + H(inseam) + " (inseam), decreasing to " + legPlan.finalCount + " sc at your ankle."],
+      ].concat(legPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 1, " + x.text + ", join. (" + x.after + " sc)"]; }))
+        .concat([["Second leg", "Rejoin " + C.cap + " at the held crotch sts and work the second leg the same way."]]),
+    });
+
+    // 4. ankle cuffs (make 2)
+    var cuffRnds = Math.max(3, jsround(3 * rib.row));
+    pieces.push({
+      id: "cuffs", title: "Ankle cuffs (make 2)", stitch: "in the round · fpdc/bpdc rib", makeCount: 2,
+      counts: { sts: legPlan.finalCount, rounds: cuffRnds },
+      progress: { total: cuffRnds, start: legPlan.finalCount, end: legPlan.finalCount, incRounds: [] },
+      yarn: { g: "rib", color: "body" },
+      steps: [
+        ["Cuff", "In " + C.body + ", at each ankle: ch 2, *fpdc, bpdc; rep from * around, join. Rep for " + cuffRnds + " rounds."],
+        ["Finish", "Fasten off. A snug rib cuff keeps footless tights from riding up."],
+      ],
+    });
+
+    // 5. mycelium veins — embroidered branching web (no progress → estimated by sts)
+    pieces.push({
+      id: "mycelium", title: "Mycelium veins", stitch: "surface crochet / embroidery",
+      counts: {}, yarn: { g: "sc", color: "spot", sts: jsround((inseam * 2 + hip) * sc.st * 1.2) },
+      steps: [
+        ["Idea", "Add a branching mycelium web in " + C.spot + " — the pale roots of your mushroom body, climbing the tights."],
+        ["Method", "Surface slip stitch (or chain / split-stitch embroidery) fine, wandering lines that fork as they go."],
+        ["Grow it", "Start a few main veins near each ankle; let them branch every few cm into finer threads that wrap the leg and thin out over the hips. Keep it sparse and asymmetric — nothing in nature is even."],
+        ["Timing", "Work it after the tights are finished and blocked, trying them on so the veins follow your leg."],
+      ],
+    });
+
+    if (legBot < 24) warnings.push("Ankle opening looks small — footless tights must still pass over your heel; check the ankle measurement.");
+    warnings.push("Crochet stretches less than knit — the negative ease and rib bands do the fitting, so try each stage on before moving on.");
+
+    return {
+      pieces: pieces, warnings: warnings,
+      meta: {
+        unit: u, kind: "tights", density: { rib: rib, hdc: hdc, sc: sc }, colors: C,
+        waistCirc: waist, hipCirc: hip, thighCirc: thigh, ankleCirc: ankle, inseam: inseam, rise: rise,
+      },
+    };
+  }
+
   function estimateYarn(result) {
     var meta = result.meta, dens = meta.density, colors = meta.colors;
     var waste = 1.12, yd = 1.0936;
@@ -687,6 +906,7 @@ var CrochetCore = (function () {
     even: even, mult: mult, density: density, incPlan: incPlan, evenAdjust: evenAdjust,
     spotChart: spotChart, spotCharts: spotCharts, DEFAULT_INPUT: DEFAULT_INPUT, defaultInput: defaultInput,
     computePattern: computePattern, computeHat: computeHat, computeBag: computeBag,
+    computeTights: computeTights, decPlan: decPlan,
     estimateYarn: estimateYarn, convertTerms: convertTerms
   };
 })();
