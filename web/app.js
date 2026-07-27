@@ -401,11 +401,11 @@ function renderSwatches() {
     }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no measurements</span>`;
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
-    const colour = (y.colorway || "").trim();
+    const cols = Array.isArray(y.colorways) ? y.colorways : (y.colorway ? [y.colorway] : []);
     const notes = (s.notes || "").trim();
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
       ${yline ? `<div class="swy">${esc(yline)}</div>` : ""}
-      ${colour ? `<div class="swy" style="opacity:.7">Colour: ${esc(colour)}</div>` : ""}
+      ${cols.length ? `<div class="swchips">${cols.map((c) => `<span class="chip mini">${esc(c)}</span>`).join("")}</div>` : ""}
       <div class="swd">${dens}</div>
       <div class="swm">st × row per ${u}, from your sts÷width &amp; rows÷height</div>
       ${notes ? `<div class="swm" style="opacity:.85;font-style:italic">${esc(notes)}</div>` : ""}
@@ -497,7 +497,33 @@ function swInstrFor(stitch, worked) {
 function suggestGripValue(f) { return f >= 1.6 ? "-0.20" : f >= 1.4 ? "-0.16" : f >= 1.2 ? "-0.12" : "-0.08"; }
 function suggestGripLabel(f) { return f >= 1.6 ? "very snug" : f >= 1.4 ? "snug" : f >= 1.2 ? "standard" : "light"; }
 let swUnit = "cm", swEditId = null, swMeas = {};   // swMeas: key -> {sts,rows,width,height,stretchW,stretchH}
-const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
+const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swWeight"];   // colours handled as chips
+let swColors = [];   // colours this swatch is used in (multi-value chip field)
+
+function renderColorChips() {
+  const wrap = $("swColorway"), input = $("swColorwayInput");
+  wrap.querySelectorAll(".chip").forEach((n) => n.remove());
+  for (const c of swColors) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${esc(c)} <button type="button" class="cx" data-c="${esc(c)}" title="Remove">×</button>`;
+    wrap.insertBefore(chip, input);
+  }
+}
+function addColor(v) {
+  (v || "").split(",").map((x) => x.trim()).filter(Boolean).forEach((c) => {
+    if (!swColors.some((x) => x.toLowerCase() === c.toLowerCase())) swColors.push(c);
+  });
+  renderColorChips();
+}
+function removeColor(v) { swColors = swColors.filter((x) => x !== v); renderColorChips(); }
+// colours in the record, including any text still sitting in the input
+function gatherColors() {
+  const pending = ($("swColorwayInput").value || "").trim();
+  const out = [...swColors];
+  if (pending && !out.some((x) => x.toLowerCase() === pending.toLowerCase())) out.push(pending);
+  return out;
+}
 const SWATCH_INSTR = {
   ribBlo: {
     flat: `<div class="guide"><p><b>BLO rib — worked flat</b> (this is the default sideways band). Back-loop-only single crochet, turned every row, worked as a long thin strip and seamed short-end to short-end into a ring. A flat, turned swatch matches this fabric exactly.</p>
@@ -643,6 +669,7 @@ function removeMeas(key) { delete swMeas[key]; renderSwMeas(); }
 function clearSwatchForm() {
   $("swName").value = ""; $("swNotes").value = "";
   for (const id of SW_YARN) $(id).value = "";
+  $("swColorwayInput").value = ""; swColors = []; renderColorChips();
   swUnit = unit; swMeas = {};
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
   renderSwMeas();
@@ -652,7 +679,11 @@ function loadSwatchForm(rec) {
   $("swName").value = rec.name || "";
   const y = rec.yarn || {};
   $("swBrand").value = y.brand || ""; $("swLine").value = y.line || ""; $("swFiber").value = y.fiber || "";
-  $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || ""; $("swColorway").value = y.colorway || "";
+  $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || "";
+  // colours: array (current) or a legacy single/comma "colorway" string
+  swColors = Array.isArray(y.colorways) ? [...y.colorways]
+    : (y.colorway ? y.colorway.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  $("swColorwayInput").value = ""; renderColorChips();
   $("swNotes").value = rec.notes || "";
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
@@ -677,7 +708,7 @@ function gatherSwatchRecord() {
   return {
     name: ($("swName").value || "").trim(),
     unit: swUnit,
-    yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorway: $("swColorway").value.trim() },
+    yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorways: gatherColors() },
     notes: ($("swNotes").value || "").trim(),
     measurements,
   };
@@ -903,6 +934,18 @@ function wire() {
   });
   $("swAddType").addEventListener("change", (e) => {
     if (e.target.value) { addMeas(e.target.value); e.target.value = ""; }
+  });
+
+  // colour chips — Enter or comma commits the typed colour; Backspace on empty removes the last
+  $("swColorwayInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addColor(e.target.value); e.target.value = ""; }
+    else if (e.key === "Backspace" && !e.target.value && swColors.length) { removeColor(swColors[swColors.length - 1]); }
+  });
+  $("swColorwayInput").addEventListener("blur", (e) => { addColor(e.target.value); e.target.value = ""; });
+  $("swColorway").addEventListener("click", (e) => {
+    const cx = e.target.closest(".cx");
+    if (cx) removeColor(cx.dataset.c);
+    else if (e.target.id === "swColorway") $("swColorwayInput").focus();   // click empty area to type
   });
 
   // unit toggle converts the numeric fields so 92cm becomes 36.2in
