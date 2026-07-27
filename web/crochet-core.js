@@ -82,21 +82,25 @@ var CrochetCore = (function () {
     }
     var inc = to - frm;
     if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    // Distribute evenly by spreading whichever is the MINORITY — the increase
-    // stitches or the plain ones — so the shaping never bunches on one side.
+    // Spread evenly with NO tail clump: split the round into `groups` (one for each
+    // minority stitch — the increases, or the plain sts when near-doubling), then
+    // share the majority stitches across those groups so the group sizes differ by
+    // at most one. Any remainder becomes a few slightly-larger groups worked first,
+    // not a block dumped at the end.
     var doubles = inc, singles = frm - inc;
-    if (doubles <= singles) {                       // increases are the minority → space them out
-      var iv2 = Math.floor(frm / doubles);
-      var tail2 = frm - iv2 * doubles;
-      var lead2 = (iv2 - 1) > 0 ? stitch + " in each of next " + (iv2 - 1) + " sts, " : "";
-      return "*" + lead2 + "2 " + stitch + " in next st; rep from * " + doubles + " times" +
-        (tail2 > 0 ? ", " + stitch + " in each of last " + tail2 + " sts" : "");
-    }
-    // plain stitches are the minority (near-doubling) → space the plain ones out
-    var ivs = Math.floor(frm / singles);
-    var tailD = frm - ivs * singles;
-    return "*2 " + stitch + " in each of next " + (ivs - 1) + " sts, " + stitch + " in next st; rep from * " +
-      singles + " times" + (tailD > 0 ? ", 2 " + stitch + " in each of last " + tailD + " sts" : "");
+    var majDouble = doubles > singles;                 // which stitch repeats within a group
+    var majCount = majDouble ? doubles : singles;
+    var groups = majDouble ? singles : doubles;        // one minority ("divider") stitch per group
+    var q = Math.floor(majCount / groups), rr = majCount % groups;
+    var maj = majDouble ? "2 " + stitch : stitch, div = majDouble ? stitch : "2 " + stitch;
+    var block = function (k, n) {
+      var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
+      return "*" + majPart + ", " + div + " in next st; rep from * " + n + " times";
+    };
+    var parts = [];
+    if (rr > 0) parts.push(block(q + 1, rr));           // the `rr` larger groups, worked first
+    if (groups - rr > 0) parts.push(block(q, groups - rr));
+    return parts.join(", ");
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {

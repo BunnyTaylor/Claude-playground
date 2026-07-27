@@ -90,16 +90,22 @@ test("evenAdjust consumes and produces exact counts", () => {
     throw new Error("unparsed segment: " + s);
   };
   // parse a full evenAdjust string → [consumed, produced], or null for the
-  // count-less forms (identity / more-than-doubling fallback)
+  // count-less forms (identity / more-than-doubling fallback). Handles one or
+  // more "*<body>; rep from * N times" blocks plus an optional trailing run.
   const parse = (str) => {
     if (str === `${st} in each st around`) return null;
     if (str.includes("evenly to")) return null;
-    const m = str.match(/^\*(.*); rep from \* (\d+) times(?:, (.*))?$/);
-    assert.ok(m, "recognised shape: " + str);
-    const body = m[1], reps = +m[2], tail = m[3];
-    let c = 0, p = 0;
-    for (const t of body.split(", ")) { const [sc, sp] = seg(t); c += sc * reps; p += sp * reps; }
-    if (tail) { const [sc, sp] = seg(tail); c += sc; p += sp; }
+    let c = 0, p = 0, matched = false, end = 0;
+    const re = /\*(.+?); rep from \* (\d+) times/g;
+    let m;
+    while ((m = re.exec(str))) {
+      matched = true; end = re.lastIndex;
+      const reps = +m[2];
+      for (const t of m[1].split(", ")) { const [sc, sp] = seg(t); c += sc * reps; p += sp * reps; }
+    }
+    assert.ok(matched, "recognised shape: " + str);
+    const rest = str.slice(end).replace(/^,\s*/, "").trim();   // e.g. a decrease tail run
+    if (rest) for (const t of rest.split(", ")) { const [sc, sp] = seg(t); c += sc; p += sp; }
     return [c, p];
   };
   for (let from = 20; from <= 400; from += 7) {
