@@ -34,14 +34,17 @@ Dockerfile              self-host on any Docker host (nginx static)
 ## Gauge swatches
 
 There's a dedicated **Swatch tool** (home → **New swatch**, or Edit a saved one)
-that records a gauge with the **yarn it was measured on** (brand, line, fibre,
-weight, hook, colourway) and gives **construction-aware, per-stitch
-instructions** — because a flat back-and-forth swatch doesn't equal
-in-the-round fabric. Rib is tracked as **two separate swatches** — back-loop-only
-(BLO) and post-stitch columns — because they're different fabrics, and each can be
-worked flat *or* in the round; the studio applies whichever matches your Ribbing
-setting. The hdc/sc swatches are worked in the round (or flat-without-turning), and
-the tool explains the back-loop/front-loop trick for mimicking in-the-round BLO flat.
+that records gauges against the **yarn they were measured on** (brand, line,
+fibre, weight, hook, colourway). A swatch profile holds a **list of
+measurements** you add on demand (via a "+ Add" menu, so it never crowds); each
+measurement is a **stitch × construction** — e.g. `BLO rib · flat`,
+`Post rib · in the round`, `Hdc · in the round` — so flat and round of the same
+stitch are separate entries and you can mix them freely on one profile. Each
+carries **construction-aware instructions** (a flat back-and-forth swatch
+doesn't equal in-the-round fabric), a **relaxed** gauge, and an optional
+**stretched** size. For stretchy stitches (rib) the stretched size gives a
+stretch factor that **auto-suggests the waistband grip** when you use the swatch
+in the studio — so a very stretchy rib gets deeper negative ease automatically.
 
 Each saved swatch shows its derived density (`stitches ÷ width` and
 `rows ÷ height`, as st × row per cm/inch), plus its colourway and any freeform
