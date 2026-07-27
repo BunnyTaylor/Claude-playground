@@ -401,11 +401,11 @@ function renderSwatches() {
     }).filter(Boolean).join("") || `<span class="sd" style="opacity:.6">no measurements</span>`;
     const y = s.yarn || {};
     const yline = [y.brand, y.line, y.weight, y.hook].filter(Boolean).join(" · ");
-    const colour = (y.colorway || "").trim();
+    const cols = Array.isArray(y.colorways) ? y.colorways : (y.colorway ? [y.colorway] : []);
     const notes = (s.notes || "").trim();
     return `<div class="swcard"><div class="swtop"><div class="swn">${esc(s.name)}</div><button class="x" data-delsw="${id}" title="Delete">✕</button></div>
       ${yline ? `<div class="swy">${esc(yline)}</div>` : ""}
-      ${colour ? `<div class="swy" style="opacity:.7">Colour: ${esc(colour)}</div>` : ""}
+      ${cols.length ? `<div class="swchips">${cols.map((c) => `<span class="chip mini">${esc(c)}</span>`).join("")}</div>` : ""}
       <div class="swd">${dens}</div>
       <div class="swm">st × row per ${u}, from your sts÷width &amp; rows÷height</div>
       ${notes ? `<div class="swm" style="opacity:.85;font-style:italic">${esc(notes)}</div>` : ""}
@@ -497,7 +497,33 @@ function swInstrFor(stitch, worked) {
 function suggestGripValue(f) { return f >= 1.6 ? "-0.20" : f >= 1.4 ? "-0.16" : f >= 1.2 ? "-0.12" : "-0.08"; }
 function suggestGripLabel(f) { return f >= 1.6 ? "very snug" : f >= 1.4 ? "snug" : f >= 1.2 ? "standard" : "light"; }
 let swUnit = "cm", swEditId = null, swMeas = {};   // swMeas: key -> {sts,rows,width,height,stretchW,stretchH}
-const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swColorway", "swWeight"];
+const SW_YARN = ["swBrand", "swLine", "swFiber", "swHook", "swWeight"];   // colours handled as chips
+let swColors = [];   // colours this swatch is used in (multi-value chip field)
+
+function renderColorChips() {
+  const wrap = $("swColorway"), input = $("swColorwayInput");
+  wrap.querySelectorAll(".chip").forEach((n) => n.remove());
+  for (const c of swColors) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${esc(c)} <button type="button" class="cx" data-c="${esc(c)}" title="Remove">×</button>`;
+    wrap.insertBefore(chip, input);
+  }
+}
+function addColor(v) {
+  (v || "").split(",").map((x) => x.trim()).filter(Boolean).forEach((c) => {
+    if (!swColors.some((x) => x.toLowerCase() === c.toLowerCase())) swColors.push(c);
+  });
+  renderColorChips();
+}
+function removeColor(v) { swColors = swColors.filter((x) => x !== v); renderColorChips(); }
+// colours in the record, including any text still sitting in the input
+function gatherColors() {
+  const pending = ($("swColorwayInput").value || "").trim();
+  const out = [...swColors];
+  if (pending && !out.some((x) => x.toLowerCase() === pending.toLowerCase())) out.push(pending);
+  return out;
+}
 const SWATCH_INSTR = {
   ribBlo: {
     flat: `<div class="guide"><p><b>BLO rib — worked flat</b> (this is the default sideways band). Back-loop-only single crochet, turned every row, worked as a long thin strip and seamed short-end to short-end into a ring. A flat, turned swatch matches this fabric exactly.</p>
@@ -588,10 +614,14 @@ function measDerivedHtml(key) {
   const t = SW_TYPE_BY_KEY[key];
   const d = densityIn({ sts: m.sts, rows: m.rows, width: m.width, height: m.height }, swUnit);
   let s = d ? `≈ <b>${d.st}×${d.row}</b> st×row per ${swUnit}` : `<span style="opacity:.65">enter sts + width for density</span>`;
-  const f = measStretchFactor(m);
-  if (f > 1.001) {
-    s += ` · stretches <b>+${Math.round((f - 1) * 100)}%</b>`;
-    if (t.stretchy) s += ` → suggests a <b>${suggestGripLabel(f)}</b> waistband grip`;
+  const wF = (m.stretchW > 0 && m.width > 0) ? m.stretchW / m.width : 0;
+  const hF = (m.stretchH > 0 && m.height > 0) ? m.stretchH / m.height : 0;
+  const bits = [];
+  if (wF > 1.001) bits.push(`+${Math.round((wF - 1) * 100)}% wide`);
+  if (hF > 1.001) bits.push(`+${Math.round((hF - 1) * 100)}% tall`);
+  if (bits.length) {
+    s += ` · stretches <b>${bits.join(", ")}</b>`;
+    if (t.stretchy) s += ` → suggests a <b>${suggestGripLabel(Math.max(wF, hF))}</b> waistband grip`;
   }
   return s;
 }
@@ -600,12 +630,15 @@ function measCardHtml(key) {
   const m = swMeas[key], t = SW_TYPE_BY_KEY[key];
   const v = (x) => (x > 0 ? x : "");
   const inp = (f, step, ph) => `<input type="number" step="${step}" data-k="${key}" data-f="${f}" value="${v(m[f])}"${ph ? ` placeholder="${ph}"` : ""}>`;
+  // Columns pair each count with its dimension: Sts | W , Rows | H. The stretched
+  // row leaves the count cells blank (counts don't change) and puts stretched-W
+  // directly under W and stretched-H under H, so each direction reads top-to-bottom.
   return `<div class="swmeas" data-k="${key}">
     <div class="swmtop"><b>${measTypeLabel(t)}</b><button class="x" data-rm="${key}" title="Remove">✕</button></div>
-    <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">Rows</div><div class="gh">W</div><div class="gh">H</div></div>
-    <div class="gauge"><div class="gl">Relaxed</div>${inp("sts", "0.5")}${inp("rows", "0.5")}${inp("width", "0.1")}${inp("height", "0.1")}</div>
-    <div class="gauge"><div class="gl" style="opacity:.75">Stretched</div><div></div><div></div>${inp("stretchW", "0.1", "W")}${inp("stretchH", "0.1", "H")}</div>
-    <div class="gnote" style="margin:1px 0 4px">Optional — pull it firmly (comfortable max) and note the new W × H.${t.stretchy ? " Recommended for rib." : ""}</div>
+    <div class="gauge"><div class="gh"></div><div class="gh">Sts</div><div class="gh">W</div><div class="gh">Rows</div><div class="gh">H</div></div>
+    <div class="gauge"><div class="gl">Relaxed</div>${inp("sts", "0.5")}${inp("width", "0.1")}${inp("rows", "0.5")}${inp("height", "0.1")}</div>
+    <div class="gauge"><div class="gl" style="opacity:.75">Stretched</div><div></div>${inp("stretchW", "0.1", "→ W")}<div></div>${inp("stretchH", "0.1", "↓ H")}</div>
+    <div class="gnote" style="margin:1px 0 4px">Optional. Stretch the swatch <b>sideways</b> to a comfortable max and note the new <b>width</b>; stretch it <b>lengthwise</b> and note the new <b>height</b>. Sts/rows don't change.${t.stretchy ? " Recommended for rib." : ""}</div>
     <div class="swderiv gnote" data-d="${key}">${measDerivedHtml(key)}</div>
     <details class="refbox" style="margin-top:8px"><summary>How to swatch this</summary>${swInstrFor(t.stitch, t.worked)}</details>
   </div>`;
@@ -636,6 +669,7 @@ function removeMeas(key) { delete swMeas[key]; renderSwMeas(); }
 function clearSwatchForm() {
   $("swName").value = ""; $("swNotes").value = "";
   for (const id of SW_YARN) $(id).value = "";
+  $("swColorwayInput").value = ""; swColors = []; renderColorChips();
   swUnit = unit; swMeas = {};
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
   renderSwMeas();
@@ -645,7 +679,11 @@ function loadSwatchForm(rec) {
   $("swName").value = rec.name || "";
   const y = rec.yarn || {};
   $("swBrand").value = y.brand || ""; $("swLine").value = y.line || ""; $("swFiber").value = y.fiber || "";
-  $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || ""; $("swColorway").value = y.colorway || "";
+  $("swWeight").value = y.weight || ""; $("swHook").value = y.hook || "";
+  // colours: array (current) or a legacy single/comma "colorway" string
+  swColors = Array.isArray(y.colorways) ? [...y.colorways]
+    : (y.colorway ? y.colorway.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  $("swColorwayInput").value = ""; renderColorChips();
   $("swNotes").value = rec.notes || "";
   swUnit = rec.unit || "cm";
   for (const b of $("swUnitSeg").children) b.classList.toggle("on", b.dataset.unit === swUnit);
@@ -670,7 +708,7 @@ function gatherSwatchRecord() {
   return {
     name: ($("swName").value || "").trim(),
     unit: swUnit,
-    yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorway: $("swColorway").value.trim() },
+    yarn: { brand: $("swBrand").value.trim(), line: $("swLine").value.trim(), fiber: $("swFiber").value.trim(), weight: $("swWeight").value.trim(), hook: $("swHook").value.trim(), colorways: gatherColors() },
     notes: ($("swNotes").value || "").trim(),
     measurements,
   };
@@ -896,6 +934,18 @@ function wire() {
   });
   $("swAddType").addEventListener("change", (e) => {
     if (e.target.value) { addMeas(e.target.value); e.target.value = ""; }
+  });
+
+  // colour chips — Enter or comma commits the typed colour; Backspace on empty removes the last
+  $("swColorwayInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addColor(e.target.value); e.target.value = ""; }
+    else if (e.key === "Backspace" && !e.target.value && swColors.length) { removeColor(swColors[swColors.length - 1]); }
+  });
+  $("swColorwayInput").addEventListener("blur", (e) => { addColor(e.target.value); e.target.value = ""; });
+  $("swColorway").addEventListener("click", (e) => {
+    const cx = e.target.closest(".cx");
+    if (cx) removeColor(cx.dataset.c);
+    else if (e.target.id === "swColorway") $("swColorwayInput").focus();   // click empty area to type
   });
 
   // unit toggle converts the numeric fields so 92cm becomes 36.2in
