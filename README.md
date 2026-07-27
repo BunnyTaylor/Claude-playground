@@ -151,9 +151,18 @@ through any refactor:
 
 Known-good default output: skirt 104 → 193 hdc, 50 rnds; flounce 134 → 241 sc,
 29 rnds; spots 4 × 5, repeat 9 × 10; sleeves → 67 balloon. The waistband
-depends on the ribbing style — **sideways** (default) is 62 rows around × 22
+depends on the ribbing style — **sideways** (default) is 58 rows around × 22
 tall; the **in-the-round** option is 124 sts × 11 rnds. If a refactor changes
 these, something broke.
+
+**Waistband grip:** the ribbed band is worked to a *relaxed* circumference
+smaller than the waist, so it must stretch to sit and that stretch is what grips.
+Sideways back-loop rib is far stretchier than post rib, so it gets deeper
+negative ease by default (`style.bandEase`, a fraction of the waist: sideways
+−15%, post ≈ the `waistEase` cm value). The **Waistband grip** selector
+(Auto/Light/Standard/Snug/Very snug) overrides it. This band ease is separate
+from `waistEase`, which still sets the skirt/hem geometry — so changing grip
+doesn't resize the skirt.
 
 ### Ribbing (waistband & cuffs)
 

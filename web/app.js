@@ -51,6 +51,8 @@ function gather() {
     dotDia: sizes.length ? sizes[0] : 2.5,
     ribStyle: $("ribStyle").value,
   };
+  // "auto" lets the engine pick negative ease by rib style; otherwise it's a fraction
+  if ($("bandEase").value !== "auto") style.bandEase = parseFloat($("bandEase").value);
   // one size -> uniform tapestry bands; several -> a scattered mix
   if (sizes.length > 1) style.dotSizes = sizes;
   if ($("sleeveless").checked) style.sleeveless = true;
@@ -73,6 +75,7 @@ function gather() {
       names: { capName: $("capName").value, spotName: $("spotName").value, bodyName: $("bodyName").value },
       dotSizes: $("dotSizes").value, dotGap: $("dotGap").value,
       waistEase: $("waistEase").value, fullness: $("fullness").value,
+      bandEase: $("bandEase").value,
       flare: $("flare").value, balloon: $("balloon").value,
       capCol: $("capCol").value, spotCol: $("spotCol").value, bodyCol: $("bodyCol").value,
     },
@@ -113,6 +116,7 @@ function apply(state) {
   setSelect("flare", S.flare);
   setSelect("balloon", S.balloon);
   setSelect("ribStyle", S.ribStyle || "sideways");
+  setSelect("bandEase", (ui && ui.bandEase) || (S.bandEase != null ? String(S.bandEase) : "auto"));
   if (ui) {
     $("capCol").value = ui.capCol || "#B83A2B";
     $("spotCol").value = ui.spotCol || "#FCF8EF";

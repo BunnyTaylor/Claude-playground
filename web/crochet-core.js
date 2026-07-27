@@ -145,24 +145,32 @@ var CrochetCore = (function () {
     var pieces = [];
 
     // 1. waistband
-    var wbCirc = waist + S.waistEase;
     var ribStyle = S.ribStyle === "post" ? "post" : "sideways";   // default: sideways back-loop rib
+    var wbCirc = waist + S.waistEase;                             // fit reference for the skirt/hem (unchanged)
+    // The ribbed BAND is worked to a smaller RELAXED circumference so it must
+    // stretch to sit at the waist — that stretch is what grips. Sideways back-loop
+    // rib is far stretchier than post-stitch rib, so it needs deeper negative ease
+    // or it slides down. bandEase is a fraction of the waist; default is rib-style-
+    // aware and can be overridden with S.bandEase.
+    var bandEase = (S.bandEase != null) ? S.bandEase
+                 : (ribStyle === "sideways" ? -0.15 : (S.waistEase / Math.max(1, waist)));
+    var bandCirc = Math.max(20, waist * (1 + bandEase));         // relaxed band circumference
     var wbRnds = Math.max(4, jsround(12 * rib.row));
     var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
-    var wbRowsAround = even(jsround(wbCirc * rib.row));                    // rows around = edge pickup count (sideways)
-    var wbSts = even(jsround(wbCirc * rib.st));                           // stitches around (in-the-round)
+    var wbRowsAround = even(jsround(bandCirc * rib.row));                  // rows around = edge pickup count (sideways)
+    var wbSts = even(jsround(bandCirc * rib.st));                         // stitches around (in-the-round)
     var wbEdge, wbPiece;
     if (ribStyle === "sideways") {
       wbEdge = wbRowsAround;
       wbPiece = {
         id: "waistband", title: "Fitted waistband", stitch: "sideways · back-loop rib, seamed",
-        counts: { sts: wbRowsAround, heightSts: wbHeightSts, rowsAround: wbRowsAround, circumference: wbCirc },
+        counts: { sts: wbRowsAround, heightSts: wbHeightSts, rowsAround: wbRowsAround, circumference: bandCirc },
         progress: { total: wbRowsAround, start: wbHeightSts, end: wbHeightSts, incRounds: [] },
         steps: [
           ["Foundation", "Ch " + wbHeightSts + " — this is the band's height, not its circumference, so there's no starting chain around your body to fight the stretch."],
           ["Rib rows", "Row 1: sc in 2nd ch from hook and each ch (" + wbHeightSts + " sc). Every row after: ch 1, turn, sc in back loop only across. The back-loop ridges make the rib."],
-          ["Length", "Work " + wbRowsAround + " rows in all, checking against your waist — the strip should reach " + H(wbCirc) + " gently stretched. Add or remove rows to fit."],
-          ["Seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it pulls over your hips before continuing."],
+          ["Length", "Work " + wbRowsAround + " rows. Relaxed the strip is about " + H(bandCirc) + " — deliberately smaller than your " + H(waist) + " waist, so the stretchy rib has to grip. Try it around you: it should need a firm stretch to close and stay put with no help. Add/remove rows to fit (very stretchy yarn → fewer rows)."],
+          ["Seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it grips your waist and still pulls over your hips before continuing."],
           ["Finish", "Fasten off. The skirt is worked into the row-ends along one long edge (next piece)."]
         ]
       };
@@ -170,7 +178,7 @@ var CrochetCore = (function () {
       wbEdge = wbSts;
       wbPiece = {
         id: "waistband", title: "Fitted waistband", stitch: "in the round · fpdc/bpdc rib",
-        counts: { sts: wbSts, rounds: wbRnds, circumference: wbCirc },
+        counts: { sts: wbSts, rounds: wbRnds, circumference: bandCirc },
         progress: { total: wbRnds, start: wbSts, end: wbSts, incRounds: [] },
         steps: [
           ["Foundation (stretchy start)", "Work " + wbSts + " foundation sc (fsc) and join into a ring, not twisting — a foundation row stretches with the rib; a starting chain won't clear your hips."],
