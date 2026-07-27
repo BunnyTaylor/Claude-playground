@@ -102,16 +102,17 @@
         <div class="group-label">Colours &amp; spots</div>
         <div class="crow">
           <input type="color" id="capCol" value="#B83A2B">
-          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" placeholder="e.g. Crimson"></div>
+          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" list="swColorList" placeholder="e.g. Crimson"></div>
         </div>
         <div class="crow">
           <input type="color" id="spotCol" value="#FCF8EF">
-          <div><div class="clab">Spots</div><input type="text" id="spotName" placeholder="e.g. Ivory"></div>
+          <div><div class="clab">Spots</div><input type="text" id="spotName" list="swColorList" placeholder="e.g. Ivory"></div>
         </div>
         <div class="crow">
           <input type="color" id="bodyCol" value="#F2E4C9">
-          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" placeholder="e.g. Oat"></div>
+          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" list="swColorList" placeholder="e.g. Oat"></div>
         </div>
+        <datalist id="swColorList"></datalist>
         <div class="two">
           <div class="field">
             <label>Spot sizes <span class="hint">cm/in, comma-separated</span></label>
@@ -259,7 +260,6 @@
         <p class="sub">Measure your gauge the way the piece is actually worked, and save it with the yarn you used.</p>
 
         <div class="group-label">Yarn</div>
-        <div class="field"><label>Swatch name</label><input type="text" id="swName" placeholder="e.g. Paintbox Cotton DK · 3.5 mm"></div>
         <div class="two">
           <div class="field"><label>Brand</label><input type="text" id="swBrand" placeholder="Paintbox"></div>
           <div class="field"><label>Line</label><input type="text" id="swLine" placeholder="Cotton DK"></div>
@@ -268,11 +268,9 @@
           <div class="field"><label>Fibre</label><input type="text" id="swFiber" placeholder="100% cotton"></div>
           <div class="field"><label>Weight</label><input type="text" id="swWeight" placeholder="DK / light worsted"></div>
         </div>
-        <div class="two">
-          <div class="field"><label>Hook</label><input type="text" id="swHook" placeholder="3.5 mm"></div>
-          <div class="field"><label>Colours used <span class="hint" style="font-weight:400">type a colour &amp; press Enter — a swatch can list several (doesn't affect gauge)</span></label>
-            <div class="chips" id="swColorway"><input type="text" id="swColorwayInput" class="chipinput" placeholder="Add a colour…"></div></div>
-        </div>
+        <div class="field"><label>Colours used <span class="hint" style="font-weight:400">type a colour &amp; press Enter — a swatch can list several (doesn't affect gauge)</span></label>
+          <div class="chips" id="swColorway"><input type="text" id="swColorwayInput" class="chipinput" placeholder="Add a colour…"></div></div>
+        <div class="gnote" style="margin-top:8px">Saved as <b id="swNamePreview">Untitled yarn</b> — one profile per yarn; add a measurement per hook below. Hooks &amp; colours live together here.</div>
 
         <div class="group-label">Units</div>
         <div class="seg" id="swUnitSeg"><button data-unit="cm" class="on">cm</button><button data-unit="in">inches</button></div>
