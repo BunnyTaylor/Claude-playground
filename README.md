@@ -6,8 +6,9 @@ pattern with exact stitch counts, round-by-round instructions, a live preview,
 a per-piece row counter, a yarn estimate, and PDF export.
 
 The first collection is the **Amanita Mushroom Set** — a spotted off-shoulder
-dress with a matching mushroom-cap bucket hat and drawstring bag, all sized
-from the same gauge, colours and spots so the set matches. It's built as a
+dress with a matching mushroom-cap bucket hat, drawstring bag, and footless
+**mycelium tights** (an embroidered branching-root web), all sized from the
+same gauge, colours and spots so the set matches. It's built as a
 **platform**: new pattern generators are added via a small registry (see
 [Adding a pattern generator](#adding-a-pattern-generator)).
 

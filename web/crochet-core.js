@@ -626,6 +626,167 @@ var CrochetCore = (function () {
     };
   }
 
+  // decrease equivalent of incPlan (start > target): spreads decrease rounds
+  // evenly across the piece and uses evenAdjust for even shaping within a round.
+  function decPlan(start, target, totalRnds, stitch, setupRnds, chunkFrac) {
+    if (setupRnds === undefined) setupRnds = 1;
+    var total = start - target;
+    var out = { rounds: [], every: 0, finalCount: start };
+    if (total <= 0) return out;
+    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
+    var n = Math.max(1, jsround(total / chunk));
+    var usable = Math.max(1, totalRnds - setupRnds - 1);
+    if (n > usable) n = usable;
+    var per = Math.floor(total / n), rem = total - per * n;
+    var cur = start, prevRnd = setupRnds;
+    for (var i = 1; i <= n; i++) {
+      var sub = per + (i > n - rem ? 1 : 0);
+      var before = cur;
+      cur -= sub;
+      var rnd = setupRnds + Math.round(i * usable / n);
+      if (rnd <= prevRnd) rnd = prevRnd + 1;
+      if (rnd > totalRnds) rnd = totalRnds;
+      prevRnd = rnd;
+      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: evenAdjust(before, cur, stitch) });
+    }
+    out.every = Math.max(1, Math.round(usable / n));
+    out.finalCount = cur;
+    return out;
+  }
+
+  // ---- Matching mycelium TIGHTS (footless): rib waistband, sc hip yoke, two
+  // tapered legs, ankle cuffs, plus an embroidered mycelium web. Worked top-down. ----
+  function computeTights(input) {
+    input = input || {};
+    var u = input.unit || "cm";
+    var C = Object.assign({}, DEFAULT_INPUT.colors, input.colors || {});
+    var S = Object.assign({}, DEFAULT_INPUT.style, input.style || {});
+    var B = Object.assign({}, DEFAULT_INPUT.body, input.body || {});
+    var G = Object.assign({}, DEFAULT_INPUT.gauges, input.gauges || {});
+    var A = input.accessory || {};
+    var rib = density(G.rib, u), hdc = density(G.hdc, u), sc = density(G.sc, u);
+    var H = function (cm) { return r1(fromCm(cm, u)) + " " + u; };
+    var mapC = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
+
+    var waist = toCm(A.waist != null ? A.waist : B.waist, u);
+    var hip = toCm(A.hip != null ? A.hip : B.hip, u);
+    var thigh = toCm(A.thigh != null ? A.thigh : 56, u);
+    var ankle = toCm(A.ankle != null ? A.ankle : 24, u);
+    var inseam = toCm(A.inseam != null ? A.inseam : 70, u);
+    var rise = toCm(A.rise != null ? A.rise : 27, u);
+    var hug = 0.94;   // sc barely stretches — work ~6% under the body so tights hug
+
+    var warnings = [], pieces = [];
+
+    // 1. rib waistband (grip), same construction options as the dress
+    var ribStyle = S.ribStyle === "post" ? "post" : "sideways";
+    var bandEase = (S.bandEase != null) ? S.bandEase : (ribStyle === "sideways" ? -0.15 : (S.waistEase / Math.max(1, waist)));
+    var bandCirc = Math.max(20, waist * (1 + bandEase));
+    var bandEdge;
+    if (ribStyle === "sideways") {
+      var bandHeightSts = Math.max(6, jsround(6 * rib.st));
+      var bandRows = even(jsround(bandCirc * rib.row));
+      bandEdge = bandRows;
+      pieces.push({
+        id: "waistband", title: "Rib waistband", stitch: "sideways · back-loop rib, seamed",
+        counts: { sts: bandRows, heightSts: bandHeightSts, rowsAround: bandRows, circumference: bandCirc },
+        progress: { total: bandRows, start: bandHeightSts, end: bandHeightSts, incRounds: [] },
+        yarn: { g: "rib", color: "body" },
+        steps: [
+          ["Foundation", "In " + C.body + ", ch " + bandHeightSts + " (the band's height). Row 1: sc in 2nd ch from hook and each ch across."],
+          ["Rib rows", "Ch 1, turn, sc in back loop only across. Work " + bandRows + " rows — relaxed about " + H(bandCirc) + ", smaller than your " + H(waist) + " waist so it grips."],
+          ["Seam", "Join first and last rows into a ring. Fold double and leave a gap if you want to thread elastic."],
+        ],
+      });
+    } else {
+      var bandSts = even(jsround(bandCirc * rib.st));
+      var bandRnds = Math.max(4, jsround(6 * rib.row));
+      bandEdge = bandSts;
+      pieces.push({
+        id: "waistband", title: "Rib waistband", stitch: "in the round · fpdc/bpdc rib",
+        counts: { sts: bandSts, rounds: bandRnds, circumference: bandCirc },
+        progress: { total: bandRnds, start: bandSts, end: bandSts, incRounds: [] },
+        yarn: { g: "rib", color: "body" },
+        steps: [
+          ["Foundation (stretchy start)", "In " + C.body + ", work " + bandSts + " foundation sc and join into a ring, not twisting."],
+          ["Rib", "Ch 2, *fpdc, bpdc; rep from * around, join. Rep to Rnd " + bandRnds + ". (" + bandSts + " sts)"],
+        ],
+      });
+    }
+
+    // 2. hip yoke — waistband down to the crotch, waist → hip, sc in the round
+    var yokeTop = even(jsround(waist * sc.st * hug));
+    var yokeBot = even(jsround(hip * sc.st * hug));
+    var riseRnds = Math.max(6, jsround(rise * sc.row));
+    var yokeJoin = evenAdjust(bandEdge, yokeTop, "sc");
+    var yokePlan = incPlan(yokeTop, yokeBot, riseRnds, "sc", 1, 0.06);
+    pieces.push({
+      id: "yoke", title: "Hip yoke", stitch: "in the round, downward · sc",
+      counts: { start: yokeTop, end: yokePlan.finalCount, rounds: riseRnds, rise: rise },
+      progress: { total: riseRnds, start: yokeTop, end: yokePlan.finalCount, incRounds: mapC(yokePlan.rounds) },
+      yarn: { g: "sc", color: "cap" },
+      steps: [
+        ["Set-up", "In " + C.cap + ", join to the lower edge of the waistband. Ch 1, " + yokeJoin + ", join. (band → " + yokeTop + " sc)"],
+        ["Shape to the hip", "Work down toward the crotch over ~" + H(rise) + " (rise), increasing to " + yokePlan.finalCount + " sc at your hip."],
+      ].concat(yokePlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 1, " + x.text + ", join. (" + x.after + " sc)"]; }))
+        .concat([["Crotch", "Work plain to Rnd " + riseRnds + ", then divide for the two legs (next)."]]),
+    });
+
+    // 3. legs (make 2) — thigh → ankle taper, sc in the round
+    var gusset = Math.max(4, even(jsround(4 * sc.st)));
+    var legStart = even(jsround(thigh * sc.st * hug)) + gusset;
+    var legBot = even(jsround(ankle * sc.st * hug));
+    var legRnds = Math.max(8, jsround(inseam * sc.row));
+    var legPlan = decPlan(legStart, legBot, legRnds, "sc", 2, 0.045);
+    pieces.push({
+      id: "legs", title: "Legs (make 2)", stitch: "in the round, downward · sc", makeCount: 2,
+      counts: { start: legStart, end: legPlan.finalCount, rounds: legRnds, gusset: gusset },
+      progress: { total: legRnds, start: legStart, end: legPlan.finalCount, incRounds: mapC(legPlan.rounds) },
+      yarn: { g: "sc", color: "cap" },
+      steps: [
+        ["Divide", "At the crotch, put half the yoke sts on hold for the other leg. Rejoin " + C.cap + " around one leg and work " + gusset + " extra sc across the crotch gap — a small gusset for movement. (" + legStart + " sc)"],
+        ["Taper to the ankle", "Work down the leg over ~" + H(inseam) + " (inseam), decreasing to " + legPlan.finalCount + " sc at your ankle."],
+      ].concat(legPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 1, " + x.text + ", join. (" + x.after + " sc)"]; }))
+        .concat([["Second leg", "Rejoin " + C.cap + " at the held crotch sts and work the second leg the same way."]]),
+    });
+
+    // 4. ankle cuffs (make 2)
+    var cuffRnds = Math.max(3, jsround(3 * rib.row));
+    pieces.push({
+      id: "cuffs", title: "Ankle cuffs (make 2)", stitch: "in the round · fpdc/bpdc rib", makeCount: 2,
+      counts: { sts: legPlan.finalCount, rounds: cuffRnds },
+      progress: { total: cuffRnds, start: legPlan.finalCount, end: legPlan.finalCount, incRounds: [] },
+      yarn: { g: "rib", color: "body" },
+      steps: [
+        ["Cuff", "In " + C.body + ", at each ankle: ch 2, *fpdc, bpdc; rep from * around, join. Rep for " + cuffRnds + " rounds."],
+        ["Finish", "Fasten off. A snug rib cuff keeps footless tights from riding up."],
+      ],
+    });
+
+    // 5. mycelium veins — embroidered branching web (no progress → estimated by sts)
+    pieces.push({
+      id: "mycelium", title: "Mycelium veins", stitch: "surface crochet / embroidery",
+      counts: {}, yarn: { g: "sc", color: "spot", sts: jsround((inseam * 2 + hip) * sc.st * 1.2) },
+      steps: [
+        ["Idea", "Add a branching mycelium web in " + C.spot + " — the pale roots of your mushroom body, climbing the tights."],
+        ["Method", "Surface slip stitch (or chain / split-stitch embroidery) fine, wandering lines that fork as they go."],
+        ["Grow it", "Start a few main veins near each ankle; let them branch every few cm into finer threads that wrap the leg and thin out over the hips. Keep it sparse and asymmetric — nothing in nature is even."],
+        ["Timing", "Work it after the tights are finished and blocked, trying them on so the veins follow your leg."],
+      ],
+    });
+
+    if (legBot < 24) warnings.push("Ankle opening looks small — footless tights must still pass over your heel; check the ankle measurement.");
+    warnings.push("Crochet stretches less than knit — the negative ease and rib bands do the fitting, so try each stage on before moving on.");
+
+    return {
+      pieces: pieces, warnings: warnings,
+      meta: {
+        unit: u, kind: "tights", density: { rib: rib, hdc: hdc, sc: sc }, colors: C,
+        waistCirc: waist, hipCirc: hip, thighCirc: thigh, ankleCirc: ankle, inseam: inseam, rise: rise,
+      },
+    };
+  }
+
   function estimateYarn(result) {
     var meta = result.meta, dens = meta.density, colors = meta.colors;
     var waste = 1.12, yd = 1.0936;
@@ -701,6 +862,7 @@ var CrochetCore = (function () {
     even: even, mult: mult, density: density, incPlan: incPlan, evenAdjust: evenAdjust,
     spotChart: spotChart, spotCharts: spotCharts, DEFAULT_INPUT: DEFAULT_INPUT, defaultInput: defaultInput,
     computePattern: computePattern, computeHat: computeHat, computeBag: computeBag,
+    computeTights: computeTights, decPlan: decPlan,
     estimateYarn: estimateYarn, convertTerms: convertTerms
   };
 })();
