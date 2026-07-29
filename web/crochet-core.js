@@ -297,16 +297,30 @@ var CrochetCore = (function () {
     var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
     var wbEdgeLabel = ribStyle === "sideways" ? wbEdge + " row-ends" : wbEdge + " rib sts";
     if (hemSts <= skStart) warnings.push("Hem is no wider than the waist — raise fullness or check hdc gauge.");
+    // Hem frill worked STRAIGHT onto the bottom of the skirt — same body colour, no
+    // separate join. Flare once to a fuller ruffle (a multiple of 6 for the shell
+    // edging), ruffle straight for a few rounds, then a shell edge.
+    var frillFull = mult(jsround(skPlan.finalCount * 1.6), 6);
+    var frillRnds = Math.max(4, jsround(9 * hdc.row));
+    var frillFlare = evenAdjust(skPlan.finalCount, frillFull, "hdc");
+    var frillShells = Math.floor(frillFull / 6);
+    var frillFlareRnd = skRnds + 1, frillEndRnd = skRnds + 1 + frillRnds;
     pieces.push({
-      id: "skirt", title: "A-line skirt", stitch: "in the round, downward · hdc",
-      counts: { start: skStart, end: skPlan.finalCount, rounds: skRnds, incRounds: skPlan.rounds.length },
-      progress: { total: skRnds, start: skStart, end: skPlan.finalCount,
-        incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }) },
+      id: "skirt", title: "A-line skirt + hem frill", stitch: "in the round, downward · hdc",
+      counts: { start: skStart, hem: skPlan.finalCount, end: frillFull, shells: frillShells, rounds: frillEndRnd + 1, incRounds: skPlan.rounds.length },
+      progress: { total: frillEndRnd, start: skStart, end: frillFull,
+        incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }).concat([{ rnd: frillFlareRnd, count: frillFull }]) },
       steps: [
         ["Set-up", "Join to the lower edge of the waistband. Ch 2, " + skJoin + ", join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
         ["Plain rnds", "Ch 2, hdc in each st around, join. Rep for every round not listed."]
       ].concat(skPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
-        .concat([["Finish", "Work plain to Rnd " + skRnds + ". Fasten off. (" + skPlan.finalCount + " hdc)"]])
+        .concat([
+          ["Hem (Rnd " + skRnds + ")", "Work plain to Rnd " + skRnds + " — do NOT fasten off; the frill continues straight down the same edge. (" + skPlan.finalCount + " hdc)"],
+          ["Frill flare (Rnd " + frillFlareRnd + ")", "Ch 2, " + frillFlare + ", join. (" + frillFull + " hdc)"],
+          ["Frill ruffle", "Ch 2, hdc in each st around, join. Rep to Rnd " + frillEndRnd + " so the frill ruffles. (" + frillFull + " hdc)"],
+          ["Frill shell edge", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + frillShells + " shells)"],
+          ["Finish", "Fasten off and block the frill open."]
+        ])
     });
 
     // 3. flounce
@@ -461,30 +475,15 @@ var CrochetCore = (function () {
       ]
     });
 
-    // 7. hem frill
-    var frillBase = mult(skPlan.finalCount, 6);
-    var frillFull = jsround(frillBase * 1.6);
-    var frillRnds = Math.max(5, jsround(9 * hdc.row));
-    pieces.push({
-      id: "hemFrill", title: "Skirt hem frill", stitch: "in the round · hdc + shells",
-      counts: { base: frillBase, full: frillFull, rounds: frillRnds + 2 },
-      progress: { total: frillRnds + 2, start: frillBase, end: frillFull, incRounds: [{ rnd: 2, count: frillFull }] },
-      steps: [
-        ["Set-up", "In " + C.body + ", join to the skirt hem. Hdc evenly around to " + frillBase + " hdc (multiple of 6). Join."],
-        ["Flare", "Ch 2, *hdc in next 2 sts, 2 hdc in next; rep from * around, join. (" + frillFull + " hdc)"],
-        ["Body", "Ch 2, hdc around, join. Rep to Rnd " + frillRnds + "."],
-        ["Shells", "Ch 1, *sc, sk 2, 5 dc in next st, sk 2; rep from * around, join."],
-        ["Finish", "Fasten off and block the frill open."]
-      ]
-    });
+    // (the hem frill is now worked straight onto the skirt above — see piece 2)
 
-    // 8. mushroom border
+    // 7. mushroom border
     var motifs = Math.max(6, jsround(hemCirc / 7));
     pieces.push({
       id: "border", title: "Mushroom border", stitch: "surface embroidery",
       counts: { motifs: motifs, spacing: hemCirc / motifs },
       steps: [
-        ["Placement", "Mark " + motifs + " points around the skirt, ~" + H(hemCirc / motifs) + " apart, above the frill join."],
+        ["Placement", "Mark " + motifs + " points around the skirt, ~" + H(hemCirc / motifs) + " apart, above the hem frill."],
         ["Caps", "Embroider a cap and stem at each in " + C.cap + ", surface slip stitch or duplicate stitch."],
         ["Spots", "Tiny " + C.spot + " French knots on each cap."],
         ["Timing", "AFTER the skirt is finished and blocked — embroidering as you go distorts the increase rounds."]
@@ -900,7 +899,7 @@ var CrochetCore = (function () {
     var spec = {
       waistband: ["rib", "rib", "body"], skirt: ["hdc", "hdc", "body"],
       flounce: ["sc", "sc", "cap"], sleeves: ["sc", "sc", "cap"],
-      gillFrill: ["sc", "sc", "body"], hemFrill: ["hdc", "hdc", "body"], straps: ["sc", "sc", "cap"]
+      gillFrill: ["sc", "sc", "body"], straps: ["sc", "sc", "cap"]
     };
     function totalSts(piece) {
       var pr = piece.progress;

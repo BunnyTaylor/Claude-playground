@@ -206,10 +206,10 @@ test("mult never returns less than one repeat", () => {
 
 /* ---------------- whole pattern ---------------- */
 
-test("produces all nine pieces in construction order", () => {
+test("produces all eight pieces in construction order (hem frill folded into the skirt)", () => {
   const { pieces } = computePattern(DEFAULT_INPUT);
   assert.deepEqual(pieces.map((p) => p.id),
-    ["waistband", "skirt", "flounce", "spots", "sleeves", "gillFrill", "hemFrill", "border", "straps"]);
+    ["waistband", "skirt", "flounce", "spots", "sleeves", "gillFrill", "border", "straps"]);
 });
 
 test("waistband stitch count is even", () => {
@@ -299,7 +299,7 @@ test("multiple dot sizes produce a charts palette only on spots", () => {
 
 test("progress end matches counts and stays in bounds", () => {
   const pieces = computePattern(DEFAULT_INPUT).pieces.filter((p) => p.progress);
-  for (const id of ["waistband", "skirt", "flounce", "sleeves", "gillFrill", "hemFrill"]) {
+  for (const id of ["waistband", "skirt", "flounce", "sleeves", "gillFrill"]) {
     assert.ok(pieces.find((p) => p.id === id), id);
   }
   for (const p of pieces) {
@@ -332,7 +332,7 @@ test("sleeveless and strapless omit their pieces", () => {
   const res = computePattern(inp);
   const ids = res.pieces.map((p) => p.id);
   assert.ok(!ids.includes("sleeves") && !ids.includes("straps"));
-  assert.deepEqual(ids, ["waistband", "skirt", "flounce", "spots", "gillFrill", "hemFrill", "border"]);
+  assert.deepEqual(ids, ["waistband", "skirt", "flounce", "spots", "gillFrill", "border"]);
   assert.ok(res.warnings.some((w) => /strapless/i.test(w)));
 });
 
