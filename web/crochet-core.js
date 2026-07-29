@@ -56,29 +56,40 @@ var CrochetCore = (function () {
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
 
-    // chunk = how many sts to add per increase round. A smaller chunkFrac means
-    // more frequent, smaller increases (a smoother taper); default is ~8% of start.
-    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
-    var n = Math.max(1, jsround(total / chunk));
+    // Each increase round adds `add` stitches evenly. To keep every round a clean
+    // repeat with NO leftover tail, `add` must divide the current count — and since
+    // every count is start + k·add, that holds for all rounds exactly when `add`
+    // divides `start`. So pick the divisor of `start` nearest the target chunk
+    // (~chunkFrac of start): a smaller chunk means smaller, more frequent increases.
     var usable = Math.max(1, totalRnds - setupRnds - 1);
+    // aim for ~chunkFrac of start per round, but at least enough to reach the target
+    // within the rounds available, and never more than the whole increase.
+    var minPer = Math.ceil(total / usable);
+    var desired = Math.min(total, Math.max(jsround(start * (chunkFrac || 0.08)), minPer));
+    // add must divide start (=> divides every count => clean, tail-free rounds). Prefer
+    // a divisor near `desired` that is also big enough to finish in time (>= minPer).
+    var hiD = Math.max(1, Math.min(start - 1, total));
+    var add = 1, bestAll = Infinity, addFits = 0, bestFits = Infinity;
+    for (var d = 1; d <= hiD; d++) {
+      if (start % d) continue;
+      var dist = Math.abs(d - desired);
+      if (dist < bestAll) { bestAll = dist; add = d; }
+      if (d >= minPer && dist < bestFits) { bestFits = dist; addFits = d; }
+    }
+    if (addFits) add = addFits;
+    // the flare ends on start + n·add, a clean multiple of `add` near the target width.
+    var n = Math.max(1, Math.round(total / add));
     if (n > usable) n = usable;
-
-    var per = Math.floor(total / n);
-    var rem = total - per * n;
 
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      // spread the +1 remainder sts across the LAST `rem` rounds, not all in one,
-      // so no single increase round is noticeably bigger than the rest
-      var add = per + (i > n - rem ? 1 : 0);
       var before = cur;
-      var interval = Math.floor(before / add);
-      var tail = before - interval * add;
-      var text = interval <= 1
-        ? "2 " + stitch + " in each of first " + add + " sts, " + stitch + " in each rem st"
-        : "*" + stitch + " in each of next " + (interval - 1) + " sts, 2 " + stitch +
-          " in next st; rep from * " + add + " times" +
-          (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
+      var interval = before / add;                     // whole number: add divides before
+      var run = interval - 1;
+      var text = add === 1
+        ? "2 " + stitch + " in next st, " + stitch + " in each rem st"
+        : "*" + (run === 1 ? stitch + " in next st" : stitch + " in each of next " + run + " sts") +
+          ", 2 " + stitch + " in next st; rep from * " + add + " times";
       cur += add;
       // distribute the increase ROUNDS evenly across the whole piece so the flare
       // reaches the hem instead of finishing early and leaving a plain skirt bottom
@@ -709,21 +720,37 @@ var CrochetCore = (function () {
     var total = start - target;
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
-    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
-    var n = Math.max(1, jsround(total / chunk));
     var usable = Math.max(1, totalRnds - setupRnds - 1);
+    // mirror incPlan: remove a fixed `sub` per round that divides `start`, so every
+    // count stays a multiple of `sub` and each round is a clean repeat with no tail.
+    var minPer = Math.ceil(total / usable);
+    var desired = Math.min(total, Math.max(jsround(start * (chunkFrac || 0.08)), minPer));
+    var hiD = Math.max(1, Math.min(start - 1, total));
+    var sub = 1, bestAll = Infinity, subFits = 0, bestFits = Infinity;
+    for (var d = 1; d <= hiD; d++) {
+      if (start % d) continue;
+      var dist = Math.abs(d - desired);
+      if (dist < bestAll) { bestAll = dist; sub = d; }
+      if (d >= minPer && dist < bestFits) { bestFits = dist; subFits = d; }
+    }
+    if (subFits) sub = subFits;
+    var n = Math.max(1, Math.round(total / sub));
     if (n > usable) n = usable;
-    var per = Math.floor(total / n), rem = total - per * n;
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      var sub = per + (i > n - rem ? 1 : 0);
       var before = cur;
+      var interval = before / sub;                     // whole number: sub divides before
+      var run = interval - 2;                           // plain sts before each 2tog
+      var text = run < 1
+        ? "*" + stitch + "2tog; rep from * " + sub + " times"
+        : "*" + (run === 1 ? stitch + " in next st" : stitch + " in each of next " + run + " sts") +
+          ", " + stitch + "2tog; rep from * " + sub + " times";
       cur -= sub;
       var rnd = setupRnds + Math.round(i * usable / n);
       if (rnd <= prevRnd) rnd = prevRnd + 1;
       if (rnd > totalRnds) rnd = totalRnds;
       prevRnd = rnd;
-      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: evenAdjust(before, cur, stitch) });
+      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: text });
     }
     out.every = Math.max(1, Math.round(usable / n));
     out.finalCount = cur;

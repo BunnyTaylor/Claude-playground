@@ -58,11 +58,20 @@ test("zero or negative swatch size is rejected", () => {
 
 /* ---------------- shaping ---------------- */
 
-test("incPlan reaches its target exactly", () => {
+test("incPlan lands cleanly near its target with no leftover tail", () => {
   for (const [start, target, rounds] of [
-    [110, 221, 81], [42, 83, 36], [276, 552, 198], [62, 124, 135], [100, 101, 20],
+    [110, 221, 81], [42, 83, 36], [276, 552, 198], [62, 124, 135], [100, 101, 20], [114, 221, 56],
   ]) {
-    assert.equal(incPlan(start, target, rounds, "hdc", 1).finalCount, target, `${start}->${target}`);
+    const p = incPlan(start, target, rounds, "hdc", 1);
+    // every increase round divides evenly — no "hdc in each of last N sts" stub
+    for (const r of p.rounds) {
+      assert.ok(!/in each of last/.test(r.text), `tail in ${start}->${target}: ${r.text}`);
+      assert.equal(r.after - r.before, p.rounds[0].after - p.rounds[0].before, "constant add");
+    }
+    // finishes on a clean multiple within one increment of the requested width
+    const add = p.rounds.length ? p.rounds[0].after - p.rounds[0].before : 0;
+    assert.ok(p.finalCount >= start, `${start}->${target} not below start`);
+    assert.ok(Math.abs(p.finalCount - target) <= add, `${start}->${target} lands ${p.finalCount}`);
   }
 });
 
@@ -403,10 +412,15 @@ test("tights produce a mycelium set tagged kind:tights", () => {
   assert.equal(estimateYarn(r).total.meters > 0, true);
 });
 
-test("decPlan reaches its target exactly and never past the end", () => {
+test("decPlan lands cleanly near its target, no tail, never past the end", () => {
   for (let rounds = 6; rounds < 160; rounds += 9) {
     const p = decPlan(120, 40, rounds, "sc", 1);
-    assert.equal(p.finalCount, 40, `dec ${rounds}`);
+    for (const r of p.rounds) {
+      assert.ok(!/in each of last/.test(r.text), `tail: ${r.text}`);
+      assert.equal(r.before - r.after, p.rounds[0].before - p.rounds[0].after, "constant sub");
+    }
+    const sub = p.rounds.length ? p.rounds[0].before - p.rounds[0].after : 0;
+    assert.ok(Math.abs(p.finalCount - 40) <= sub, `dec ${rounds} lands ${p.finalCount}`);
     if (p.rounds.length) assert.ok(p.rounds[p.rounds.length - 1].rnd <= rounds);
   }
 });
