@@ -84,12 +84,8 @@ var CrochetCore = (function () {
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
       var before = cur;
-      var interval = before / add;                     // whole number: add divides before
-      var run = interval - 1;
-      var text = add === 1
-        ? "2 " + stitch + " in next st, " + stitch + " in each rem st"
-        : "*" + (run === 1 ? stitch + " in next st" : stitch + " in each of next " + run + " sts") +
-          ", 2 " + stitch + " in next st; rep from * " + add + " times";
+      // add divides before, so this is one clean repeat with no leftover tail
+      var text = spreadGroups(add, before - add, stitch, "2 " + stitch + " in next st");
       cur += add;
       // distribute the increase ROUNDS evenly across the whole piece so the flare
       // reaches the hem instead of finishing early and leaving a plain skirt bottom
@@ -104,76 +100,54 @@ var CrochetCore = (function () {
     return out;
   }
 
-  function evenAdjust(frm, to, stitch) {
-    if (to === frm) return stitch + " in each st around";
-    if (to < frm) {
-      var dec = frm - to, iv = Math.floor(frm / dec);
-      // more than half removed can't be done with 2tog alone (needs 3tog+) — rare fallback
-      if (2 * dec > frm) return stitch + "2tog around, then " + stitch + " evenly to " + to + " sts";
-      if (iv < 3) return "*" + stitch + "2tog; rep from * " + dec + " times" +
-        (frm - 2 * dec > 0 ? ", " + stitch + " in each of last " + (frm - 2 * dec) + " sts" : "");
-      var tail = frm - iv * dec;
-      return "*" + stitch + " in each of next " + (iv - 2) + " sts, " + stitch +
-        "2tog; rep from * " + dec + " times" +
-        (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
-    }
-    var inc = to - frm;
-    if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    // Distribute the increases as evenly as possible AROUND the round, not front-
-    // loaded. Split the round into `groups` (one per minority stitch — the increases,
-    // or the plain sts when near-doubling) and share the majority stitches so group
-    // sizes differ by at most one: `big` "large" groups (q+1 majority) and `small`
-    // "small" (q majority). gcd(big, small) equals gcd(frm, inc): the number of
-    // identical arcs the round splits into. When that gcd > 1 we repeat one arc
-    // around the round so the denser groups recur at evenly-spaced points; when it is
-    // 1 (frm and inc coprime — no exact repeat exists) we Bresenham-interleave the
-    // large and small groups instead of front-loading them.
-    var doubles = inc, singles = frm - inc;
-    var majDouble = doubles > singles;                 // which stitch repeats within a group
-    var majCount = majDouble ? doubles : singles;
-    var groups = majDouble ? singles : doubles;        // one minority ("divider") stitch per group
-    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr large groups, groups-rr small
-    var maj = majDouble ? "2 " + stitch : stitch, div = majDouble ? stitch : "2 " + stitch;
-    var body = function (k) {                          // one group: k majority sts, then 1 divider
-      var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
-      return majPart + ", " + div + " in next st";
+  // The one distribution primitive every shaping round uses. Spread `majCount`
+  // majority stitches across `groups` dividers as evenly as a readable instruction
+  // allows, and return the round text. One "group" is `k` majority stitches
+  // (majUnit, e.g. "hdc" or "2 hdc") then one divider (divPhrase, e.g.
+  // "2 hdc in next st" for an increase or "hdc2tog" for a decrease). Group sizes
+  // differ by at most one — `big` groups get q+1, `small` get q. gcd(big, small)
+  // is the number of identical arcs the round splits into: when > 1 we repeat one
+  // arc so the denser groups recur at evenly-spaced points; when 1 (no exact
+  // repeat) we Bresenham-interleave the large and small groups. There is never a
+  // leftover tail. Assumes groups >= 1.
+  function spreadGroups(groups, majCount, majUnit, divPhrase) {
+    if (majCount < 0) majCount = 0;                    // defensive: never below zero majority sts
+    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr groups get q+1
+    var body = function (k) {                          // k majority sts, then one divider
+      if (k <= 0) return divPhrase;
+      var majPart = k === 1 ? majUnit + " in next st" : majUnit + " in each of next " + k + " sts";
+      return majPart + ", " + divPhrase;
     };
     var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
-    var block = function (k, n) { return "*" + body(k) + "; rep from * " + n + " times"; };
+    var block = function (k, n) { return n === 1 ? body(k) : "*" + body(k) + "; rep from * " + n + " times"; };
     var big = rr, small = groups - rr;
     if (big === 0) return block(q, small);             // all groups uniform (q majority)
     if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
-    var g = gcdInt(big, small);                        // = gcd(frm, inc): number of even arcs
+    var g = gcdInt(big, small);
     if (g === 1) {
-      // Coprime — no exact even *repeat* exists, so we spread as evenly as a readable
-      // instruction allows (budget: ~5 top-level sections).
-      var SECTIONS = 5;
       var topChunks = function (s) {                    // top-level ", "-separated pieces
         var d = 0, n = 1;
-        for (var i2 = 0; i2 < s.length; i2++) {
-          var c2 = s[i2];
-          if (c2 === "(") d++; else if (c2 === ")") d--;
-          else if (d === 0 && c2 === "," && s[i2 + 1] === " ") n++;
+        for (var i = 0; i < s.length; i++) {
+          var c = s[i];
+          if (c === "(") d++; else if (c === ")") d--;
+          else if (d === 0 && c === "," && s[i + 1] === " ") n++;
         }
         return n;
       };
       var mnN = Math.min(big, small), mxN = Math.max(big, small);
       var mnBody = (big <= small) ? body(q + 1) : body(q);   // the rarer group type
       var mxBody = (big <= small) ? body(q) : body(q + 1);
-      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE) —
-      //    ideal when one type is scarce (an extra stitch dropped in here and there).
+      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE).
       var list = [], acc = 0;
-      for (var i3 = 0; i3 < groups; i3++) {
-        var nb = Math.floor((i3 + 1) * mnN / groups), h = nb !== acc; acc = nb;
+      for (var i2 = 0; i2 < groups; i2++) {
+        var nb = Math.floor((i2 + 1) * mnN / groups), h = nb !== acc; acc = nb;
         var last = list[list.length - 1];
         if (last && last.h === h) last.n++; else list.push({ h: h, n: 1 });
       }
-      var sprinkle = list.map(function (r2) { var b = r2.h ? mnBody : mxBody; return r2.n === 1 ? b : "(" + b + ") " + r2.n + " times"; }).join(", ");
-      if (topChunks(sprinkle) <= SECTIONS + 1) return sprinkle;
-      // 2) Balanced (both types plentiful): pair each rarer group with its share of
-      //    common groups into A = mnN equal-ish arcs, so large and small interleave
-      //    at the finest scale instead of front-loading. The arcs come in two sizes
-      //    (one extra common group in `extra` of them), written as two blocks.
+      var sprinkle = list.map(function (r) { var b = r.h ? mnBody : mxBody; return r.n === 1 ? b : "(" + b + ") " + r.n + " times"; }).join(", ");
+      if (topChunks(sprinkle) <= 6) return sprinkle;
+      // 2) Balanced: pair each rarer group with its share of common groups into
+      //    A = mnN equal-ish arcs so the two interleave, written as two blocks.
       var A = mnN, base = Math.floor(mxN / A), extra = mxN % A;
       var arcOf = function (c) { var a = [mnBody]; for (var j = 0; j < c; j++) a.push(mxBody); return a.join(", "); };
       var arcSeg = function (c, cnt) { return "(" + arcOf(c) + ") " + cnt + (cnt === 1 ? " time" : " times"); };
@@ -181,6 +155,25 @@ var CrochetCore = (function () {
     }
     // g equal arcs: each arc has big/g large groups then small/g small groups.
     return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
+  }
+
+  // Adjust a round from `frm` to `to` stitches in one round, evenly and tail-free.
+  function evenAdjust(frm, to, stitch) {
+    if (to === frm) return stitch + " in each st around";
+    if (to < frm) {
+      var dec = frm - to;
+      // more than half removed can't be done with 2tog alone (needs 3tog+) — rare fallback
+      if (2 * dec > frm) return stitch + "2tog around, then " + stitch + " evenly to " + to + " sts";
+      // `dec` dividers (each a 2tog), with the frm − 2·dec plain sts spread between them
+      return spreadGroups(dec, frm - 2 * dec, stitch, stitch + "2tog");
+    }
+    var inc = to - frm;
+    if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
+    // increases are the dividers; when near-doubling, the plain sts are the rarer
+    // side, so make them the dividers instead for the more natural phrasing.
+    return inc <= frm - inc
+      ? spreadGroups(inc, frm - inc, stitch, "2 " + stitch + " in next st")
+      : spreadGroups(frm - inc, inc, "2 " + stitch, stitch + " in next st");
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {
@@ -739,12 +732,8 @@ var CrochetCore = (function () {
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
       var before = cur;
-      var interval = before / sub;                     // whole number: sub divides before
-      var run = interval - 2;                           // plain sts before each 2tog
-      var text = run < 1
-        ? "*" + stitch + "2tog; rep from * " + sub + " times"
-        : "*" + (run === 1 ? stitch + " in next st" : stitch + " in each of next " + run + " sts") +
-          ", " + stitch + "2tog; rep from * " + sub + " times";
+      // sub divides before, so this is one clean repeat with no leftover tail
+      var text = spreadGroups(sub, before - 2 * sub, stitch, stitch + "2tog");
       cur -= sub;
       var rnd = setupRnds + Math.round(i * usable / n);
       if (rnd <= prevRnd) rnd = prevRnd + 1;

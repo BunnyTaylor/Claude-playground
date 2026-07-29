@@ -425,6 +425,38 @@ test("decPlan lands cleanly near its target, no tail, never past the end", () =>
   }
 });
 
+// The whole-engine guarantee: no shaping round anywhere leaves a leftover "in each
+// of last N sts" stub or a degenerate "next 0/1 sts", across every generator and a
+// wide grid of gauges and body sizes. A shaping round is one with a repeat (rep
+// from *) that works an increase (2 <st>) or decrease (<st>2tog).
+test("no shaping round anywhere leaves a leftover tail or degenerate count", () => {
+  const shaping = /rep from \*/;
+  const change = /2 (?:hdc|sc|dc) |(?:hdc|sc|dc)2tog/;
+  const tail = /in each of last \d+ sts/;
+  const degenerate = /in (?:each of )?next 0 sts|next -\d| 1 sts\b/;
+  const bad = [];
+  for (let waist = 58; waist <= 108; waist += 5) {
+    for (let st = 10; st <= 20; st++) {
+      for (let rw = 8; rw <= 14; rw += 3) {
+        const inp = defaultInput();
+        inp.body.waist = waist;
+        inp.gauges.hdc = { sts: st, rows: rw, width: 10, height: 10 };
+        inp.gauges.sc = { sts: st + 2, rows: rw + 6, width: 10, height: 10 };
+        for (const gen of [computePattern, computeHat, computeBag, computeTights]) {
+          let res;
+          try { res = gen(inp); } catch (e) { bad.push(`${gen.name} crashed @${waist}/${st}/${rw}: ${e.message}`); continue; }
+          for (const p of res.pieces) for (const s of p.steps || []) {
+            const txt = s[1];
+            if (shaping.test(txt) && change.test(txt) && tail.test(txt)) bad.push(`${gen.name}/${p.title || p.id}/${s[0]}: TAIL — ${txt}`);
+            if (degenerate.test(txt)) bad.push(`${gen.name}/${p.title || p.id}/${s[0]}: DEGENERATE — ${txt}`);
+          }
+        }
+      }
+    }
+  }
+  assert.equal(bad.length, 0, `${bad.length} messy shaping rounds, e.g.:\n  ${bad.slice(0, 4).join("\n  ")}`);
+});
+
 /* ---------------- visualization ---------------- */
 
 test("visualizer renders well-formed SVG for single and multi size", () => {
