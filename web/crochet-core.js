@@ -564,7 +564,11 @@ var CrochetCore = (function () {
     var warnings = [], pieces = [];
     var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
 
-    var headSts = even(jsround(headCirc * hdc.st));
+    // head circumference is fit-critical; nudge toward a rounder count (so the brim
+    // increases starting from headSts divide cleanly) but stay within fit tolerance.
+    var headReal = headCirc * hdc.st, headTol = 1.3;
+    var headSts = niceCount(even(jsround(headReal)), 0,
+      Math.ceil(headReal - headTol * hdc.st), Math.floor(headReal + headTol * hdc.st));
     var radius = headCirc / (2 * Math.PI);
     var crownRnds = Math.max(6, jsround(radius * hdc.row));
     var crownPlan = incPlan(8, headSts, crownRnds, "hdc", 1);
@@ -645,7 +649,9 @@ var CrochetCore = (function () {
     var warnings = [], pieces = [];
     var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
 
-    var baseSts = even(jsround(Math.PI * diameter * hdc.st));
+    // the bag base has real slack — snap to a rounder count (cleaner eyelets, spots).
+    var baseRaw = even(jsround(Math.PI * diameter * hdc.st));
+    var baseSts = niceCount(baseRaw, 0, baseRaw - 3, baseRaw + 3);
     var baseRnds = Math.max(5, jsround((diameter / 2) * hdc.row));
     var basePlan = incPlan(8, baseSts, baseRnds, "hdc", 1);
     pieces.push({
@@ -807,7 +813,11 @@ var CrochetCore = (function () {
     }
 
     // 2. hip yoke — waistband down to the crotch, waist → hip, sc in the round
-    var yokeTop = even(jsround(waist * sc.st * hug));
+    // waist is fit-critical; nudge toward a rounder count that also joins cleanly
+    // from the band edge and starts the yoke increases on a good divisor, within tol.
+    var yokeReal = waist * sc.st * hug, fitTol = 1.3;
+    var yokeTop = niceCount(even(jsround(yokeReal)), bandEdge,
+      Math.ceil(yokeReal - fitTol * sc.st), Math.floor(yokeReal + fitTol * sc.st));
     var yokeBot = even(jsround(hip * sc.st * hug));
     var riseRnds = Math.max(6, jsround(rise * sc.row));
     var yokeJoin = evenAdjust(bandEdge, yokeTop, "sc");
@@ -826,7 +836,11 @@ var CrochetCore = (function () {
 
     // 3. legs (make 2) — thigh → ankle taper, sc in the round
     var gusset = Math.max(4, even(jsround(4 * sc.st)));
-    var legStart = even(jsround(thigh * sc.st * hug)) + gusset;
+    // thigh has a little ease; nudge the leg start toward a rounder count so the
+    // taper decreases (which start from legStart) divide cleanly, within fit tol.
+    var legReal = thigh * sc.st * hug + gusset;
+    var legStart = niceCount(even(jsround(thigh * sc.st * hug)) + gusset, 0,
+      Math.ceil(legReal - 1.3 * sc.st), Math.floor(legReal + 1.3 * sc.st));
     var legBot = even(jsround(ankle * sc.st * hug));
     var legRnds = Math.max(8, jsround(inseam * sc.row));
     var legPlan = decPlan(legStart, legBot, legRnds, "sc", 2, 0.045);
