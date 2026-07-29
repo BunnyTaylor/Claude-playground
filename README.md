@@ -162,8 +162,11 @@ through any refactor:
 - skirt-top circumference lands within 1.5 cm of the true waist
 - cm and inch inputs for the same body produce the same pattern (±2 sts)
 
-Known-good default output: skirt 104 → 193 hdc, 50 rnds; flounce 134 → 241 sc,
-29 rnds; spots 4 × 5, repeat 9 × 10; sleeves → 67 balloon. The waistband
+Known-good default output: skirt 104 → 192 hdc, 50 rnds; flounce 134 → 241 sc,
+29 rnds; spots 4 × 5, repeat 9 × 10; sleeves 30 → 66 balloon → 54 top. Decorative
+counts (hem, balloon) snap to round numbers and fit-critical counts (skirt top,
+cuff) nudge a stitch or two toward one, staying inside the fit tolerance, so
+shaping rounds land cleanly (e.g. the balloon join is a single ×6 repeat). The waistband
 depends on the ribbing style — **sideways** (default) is 58 rows around × 22
 tall; the **in-the-round** option is 124 sts × 11 rnds. If a refactor changes
 these, something broke.

@@ -26,6 +26,22 @@ var CrochetCore = (function () {
   var even = function (n) { n = Math.trunc(n); return (n % 2) ? n + 1 : n; };
   var mult = function (n, m) { return Math.max(m, jsround(n / m) * m); };
   var gcdInt = function (a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { var t = b; b = a % b; a = t; } return a; };
+  // how "round" a stitch count is: rewards divisibility by common repeat sizes, so
+  // shaping rounds land on counts that continue cleanly and are easy to track.
+  var factorScore = function (n) { var s = 0, d = [2, 3, 4, 5, 6, 8, 12]; for (var i = 0; i < d.length; i++) if (n % d[i] === 0) s++; return s; };
+  // snap a raw count to the nicest integer in [lo, hi]: prefer many small factors,
+  // then a larger gcd with `from` (a cleaner join/increase from that count), then
+  // the least movement. Callers set lo/hi to bound how far the count may drift —
+  // wide for decorative counts, within the fit tolerance for body-fitted ones.
+  var niceCount = function (raw, from, lo, hi) {
+    var best = raw, bestScore = -Infinity;
+    for (var t = lo; t <= hi; t++) {
+      if (t < 1) continue;
+      var s = factorScore(t) * 4 + (from ? gcdInt(from, Math.abs(t - from)) : 0) - Math.abs(t - raw);
+      if (s > bestScore) { bestScore = s; best = t; }
+    }
+    return best;
+  };
 
   function density(g, unit) {
     var w = toCm(g.width, unit), h = toCm(g.height, unit);
@@ -261,9 +277,17 @@ var CrochetCore = (function () {
 
     // 2. skirt
     var hemCirc = wbCirc * S.fullness;
-    var hemSts = jsround(hemCirc * hdc.st);
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
-    var skStart = jsround(waist * hdc.st);
+    // Skirt top rides the true waist (fit-critical): nudge to a rounder count but
+    // keep it within a stitch or two of the waist (well inside fit tolerance) and,
+    // where it can, sharing a factor with the band edge for a cleaner join round.
+    var skTol = 1.3;                                            // cm of allowed give
+    var skStart = niceCount(jsround(waist * hdc.st), wbEdge,
+      Math.ceil(waist * hdc.st - skTol * hdc.st), Math.floor(waist * hdc.st + skTol * hdc.st));
+    // Hem is a decorative flare with real slack: snap up to a clean count that
+    // continues cleanly from the skirt top.
+    var hemRaw = jsround(hemCirc * hdc.st);
+    var hemSts = niceCount(hemRaw, skStart, hemRaw - 3, hemRaw + 3);
     var skJoin = evenAdjust(wbEdge, skStart, "hdc");
     // ~4.5% per increase round → smaller, more frequent increases for a smoother A-line
     var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
@@ -349,9 +373,17 @@ var CrochetCore = (function () {
     // 5. sleeves — the cuff follows the same ribStyle as the waistband, then the
     // body is worked in the round identically from scCuff onward.
     var cuffSts = even(jsround((wrist + 2) * rib.st));
-    var scCuff = jsround((wrist + 2) * sc.st);
-    var balSts = jsround(upperArm * S.balloon * sc.st);
-    var topSts = jsround((upperArm + 4) * sc.st);
+    // Cuff opening rides the wrist (fit-critical): nudge to a rounder count within a
+    // stitch or two, sharing a factor with the rib count for a cleaner cuff join.
+    var scTol = 1.3, scRealCuff = (wrist + 2) * sc.st;
+    var scCuff = niceCount(jsround(scRealCuff), cuffSts,
+      Math.ceil(scRealCuff - scTol * sc.st), Math.floor(scRealCuff + scTol * sc.st));
+    // Balloon peak is decorative fullness with real slack — snap to a clean count.
+    var balRaw = jsround(upperArm * S.balloon * sc.st);
+    var balSts = niceCount(balRaw, scCuff * 2, balRaw - 3, balRaw + 3);
+    // Sleeve top has a little ease; nudge to a rounder count within a stitch or two.
+    var topRaw = jsround((upperArm + 4) * sc.st);
+    var topSts = niceCount(topRaw, balSts, topRaw - 2, topRaw + 2);
     var cuffRnds = Math.max(3, jsround(5 * rib.row));
     var cuffHeightSts = Math.max(6, jsround(cuffRnds * rib.st / rib.row));
     var cuffRowsAround = even(jsround((wrist + 2) * rib.row));
