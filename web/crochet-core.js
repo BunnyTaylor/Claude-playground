@@ -26,6 +26,22 @@ var CrochetCore = (function () {
   var even = function (n) { n = Math.trunc(n); return (n % 2) ? n + 1 : n; };
   var mult = function (n, m) { return Math.max(m, jsround(n / m) * m); };
   var gcdInt = function (a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { var t = b; b = a % b; a = t; } return a; };
+  // how "round" a stitch count is: rewards divisibility by common repeat sizes, so
+  // shaping rounds land on counts that continue cleanly and are easy to track.
+  var factorScore = function (n) { var s = 0, d = [2, 3, 4, 5, 6, 8, 12]; for (var i = 0; i < d.length; i++) if (n % d[i] === 0) s++; return s; };
+  // snap a raw count to the nicest integer in [lo, hi]: prefer many small factors,
+  // then a larger gcd with `from` (a cleaner join/increase from that count), then
+  // the least movement. Callers set lo/hi to bound how far the count may drift —
+  // wide for decorative counts, within the fit tolerance for body-fitted ones.
+  var niceCount = function (raw, from, lo, hi) {
+    var best = raw, bestScore = -Infinity;
+    for (var t = lo; t <= hi; t++) {
+      if (t < 1) continue;
+      var s = factorScore(t) * 4 + (from ? gcdInt(from, Math.abs(t - from)) : 0) - Math.abs(t - raw);
+      if (s > bestScore) { bestScore = s; best = t; }
+    }
+    return best;
+  };
 
   function density(g, unit) {
     var w = toCm(g.width, unit), h = toCm(g.height, unit);
@@ -40,29 +56,36 @@ var CrochetCore = (function () {
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
 
-    // chunk = how many sts to add per increase round. A smaller chunkFrac means
-    // more frequent, smaller increases (a smoother taper); default is ~8% of start.
-    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
-    var n = Math.max(1, jsround(total / chunk));
+    // Each increase round adds `add` stitches evenly. To keep every round a clean
+    // repeat with NO leftover tail, `add` must divide the current count — and since
+    // every count is start + k·add, that holds for all rounds exactly when `add`
+    // divides `start`. So pick the divisor of `start` nearest the target chunk
+    // (~chunkFrac of start): a smaller chunk means smaller, more frequent increases.
     var usable = Math.max(1, totalRnds - setupRnds - 1);
+    // aim for ~chunkFrac of start per round, but at least enough to reach the target
+    // within the rounds available, and never more than the whole increase.
+    var minPer = Math.ceil(total / usable);
+    var desired = Math.min(total, Math.max(jsround(start * (chunkFrac || 0.08)), minPer));
+    // add must divide start (=> divides every count => clean, tail-free rounds). Prefer
+    // a divisor near `desired` that is also big enough to finish in time (>= minPer).
+    var hiD = Math.max(1, Math.min(start - 1, total));
+    var add = 1, bestAll = Infinity, addFits = 0, bestFits = Infinity;
+    for (var d = 1; d <= hiD; d++) {
+      if (start % d) continue;
+      var dist = Math.abs(d - desired);
+      if (dist < bestAll) { bestAll = dist; add = d; }
+      if (d >= minPer && dist < bestFits) { bestFits = dist; addFits = d; }
+    }
+    if (addFits) add = addFits;
+    // the flare ends on start + n·add, a clean multiple of `add` near the target width.
+    var n = Math.max(1, Math.round(total / add));
     if (n > usable) n = usable;
-
-    var per = Math.floor(total / n);
-    var rem = total - per * n;
 
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      // spread the +1 remainder sts across the LAST `rem` rounds, not all in one,
-      // so no single increase round is noticeably bigger than the rest
-      var add = per + (i > n - rem ? 1 : 0);
       var before = cur;
-      var interval = Math.floor(before / add);
-      var tail = before - interval * add;
-      var text = interval <= 1
-        ? "2 " + stitch + " in each of first " + add + " sts, " + stitch + " in each rem st"
-        : "*" + stitch + " in each of next " + (interval - 1) + " sts, 2 " + stitch +
-          " in next st; rep from * " + add + " times" +
-          (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
+      // add divides before, so this is one clean repeat with no leftover tail
+      var text = spreadGroups(add, before - add, stitch, "2 " + stitch + " in next st");
       cur += add;
       // distribute the increase ROUNDS evenly across the whole piece so the flare
       // reaches the hem instead of finishing early and leaving a plain skirt bottom
@@ -77,76 +100,54 @@ var CrochetCore = (function () {
     return out;
   }
 
-  function evenAdjust(frm, to, stitch) {
-    if (to === frm) return stitch + " in each st around";
-    if (to < frm) {
-      var dec = frm - to, iv = Math.floor(frm / dec);
-      // more than half removed can't be done with 2tog alone (needs 3tog+) — rare fallback
-      if (2 * dec > frm) return stitch + "2tog around, then " + stitch + " evenly to " + to + " sts";
-      if (iv < 3) return "*" + stitch + "2tog; rep from * " + dec + " times" +
-        (frm - 2 * dec > 0 ? ", " + stitch + " in each of last " + (frm - 2 * dec) + " sts" : "");
-      var tail = frm - iv * dec;
-      return "*" + stitch + " in each of next " + (iv - 2) + " sts, " + stitch +
-        "2tog; rep from * " + dec + " times" +
-        (tail > 0 ? ", " + stitch + " in each of last " + tail + " sts" : "");
-    }
-    var inc = to - frm;
-    if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
-    // Distribute the increases as evenly as possible AROUND the round, not front-
-    // loaded. Split the round into `groups` (one per minority stitch — the increases,
-    // or the plain sts when near-doubling) and share the majority stitches so group
-    // sizes differ by at most one: `big` "large" groups (q+1 majority) and `small`
-    // "small" (q majority). gcd(big, small) equals gcd(frm, inc): the number of
-    // identical arcs the round splits into. When that gcd > 1 we repeat one arc
-    // around the round so the denser groups recur at evenly-spaced points; when it is
-    // 1 (frm and inc coprime — no exact repeat exists) we Bresenham-interleave the
-    // large and small groups instead of front-loading them.
-    var doubles = inc, singles = frm - inc;
-    var majDouble = doubles > singles;                 // which stitch repeats within a group
-    var majCount = majDouble ? doubles : singles;
-    var groups = majDouble ? singles : doubles;        // one minority ("divider") stitch per group
-    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr large groups, groups-rr small
-    var maj = majDouble ? "2 " + stitch : stitch, div = majDouble ? stitch : "2 " + stitch;
-    var body = function (k) {                          // one group: k majority sts, then 1 divider
-      var majPart = k === 1 ? maj + " in next st" : maj + " in each of next " + k + " sts";
-      return majPart + ", " + div + " in next st";
+  // The one distribution primitive every shaping round uses. Spread `majCount`
+  // majority stitches across `groups` dividers as evenly as a readable instruction
+  // allows, and return the round text. One "group" is `k` majority stitches
+  // (majUnit, e.g. "hdc" or "2 hdc") then one divider (divPhrase, e.g.
+  // "2 hdc in next st" for an increase or "hdc2tog" for a decrease). Group sizes
+  // differ by at most one — `big` groups get q+1, `small` get q. gcd(big, small)
+  // is the number of identical arcs the round splits into: when > 1 we repeat one
+  // arc so the denser groups recur at evenly-spaced points; when 1 (no exact
+  // repeat) we Bresenham-interleave the large and small groups. There is never a
+  // leftover tail. Assumes groups >= 1.
+  function spreadGroups(groups, majCount, majUnit, divPhrase) {
+    if (majCount < 0) majCount = 0;                    // defensive: never below zero majority sts
+    var q = Math.floor(majCount / groups), rr = majCount % groups;   // rr groups get q+1
+    var body = function (k) {                          // k majority sts, then one divider
+      if (k <= 0) return divPhrase;
+      var majPart = k === 1 ? majUnit + " in next st" : majUnit + " in each of next " + k + " sts";
+      return majPart + ", " + divPhrase;
     };
     var seg = function (k, cnt) { return cnt === 1 ? body(k) : "(" + body(k) + ") " + cnt + " times"; };
-    var block = function (k, n) { return "*" + body(k) + "; rep from * " + n + " times"; };
+    var block = function (k, n) { return n === 1 ? body(k) : "*" + body(k) + "; rep from * " + n + " times"; };
     var big = rr, small = groups - rr;
     if (big === 0) return block(q, small);             // all groups uniform (q majority)
     if (small === 0) return block(q + 1, big);         // all groups uniform (q+1 majority)
-    var g = gcdInt(big, small);                        // = gcd(frm, inc): number of even arcs
+    var g = gcdInt(big, small);
     if (g === 1) {
-      // Coprime — no exact even *repeat* exists, so we spread as evenly as a readable
-      // instruction allows (budget: ~5 top-level sections).
-      var SECTIONS = 5;
       var topChunks = function (s) {                    // top-level ", "-separated pieces
         var d = 0, n = 1;
-        for (var i2 = 0; i2 < s.length; i2++) {
-          var c2 = s[i2];
-          if (c2 === "(") d++; else if (c2 === ")") d--;
-          else if (d === 0 && c2 === "," && s[i2 + 1] === " ") n++;
+        for (var i = 0; i < s.length; i++) {
+          var c = s[i];
+          if (c === "(") d++; else if (c === ")") d--;
+          else if (d === 0 && c === "," && s[i + 1] === " ") n++;
         }
         return n;
       };
       var mnN = Math.min(big, small), mxN = Math.max(big, small);
       var mnBody = (big <= small) ? body(q + 1) : body(q);   // the rarer group type
       var mxBody = (big <= small) ? body(q) : body(q + 1);
-      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE) —
-      //    ideal when one type is scarce (an extra stitch dropped in here and there).
+      // 1) Sprinkle the rarer groups evenly among the common ones (Bresenham + RLE).
       var list = [], acc = 0;
-      for (var i3 = 0; i3 < groups; i3++) {
-        var nb = Math.floor((i3 + 1) * mnN / groups), h = nb !== acc; acc = nb;
+      for (var i2 = 0; i2 < groups; i2++) {
+        var nb = Math.floor((i2 + 1) * mnN / groups), h = nb !== acc; acc = nb;
         var last = list[list.length - 1];
         if (last && last.h === h) last.n++; else list.push({ h: h, n: 1 });
       }
-      var sprinkle = list.map(function (r2) { var b = r2.h ? mnBody : mxBody; return r2.n === 1 ? b : "(" + b + ") " + r2.n + " times"; }).join(", ");
-      if (topChunks(sprinkle) <= SECTIONS + 1) return sprinkle;
-      // 2) Balanced (both types plentiful): pair each rarer group with its share of
-      //    common groups into A = mnN equal-ish arcs, so large and small interleave
-      //    at the finest scale instead of front-loading. The arcs come in two sizes
-      //    (one extra common group in `extra` of them), written as two blocks.
+      var sprinkle = list.map(function (r) { var b = r.h ? mnBody : mxBody; return r.n === 1 ? b : "(" + b + ") " + r.n + " times"; }).join(", ");
+      if (topChunks(sprinkle) <= 6) return sprinkle;
+      // 2) Balanced: pair each rarer group with its share of common groups into
+      //    A = mnN equal-ish arcs so the two interleave, written as two blocks.
       var A = mnN, base = Math.floor(mxN / A), extra = mxN % A;
       var arcOf = function (c) { var a = [mnBody]; for (var j = 0; j < c; j++) a.push(mxBody); return a.join(", "); };
       var arcSeg = function (c, cnt) { return "(" + arcOf(c) + ") " + cnt + (cnt === 1 ? " time" : " times"); };
@@ -154,6 +155,25 @@ var CrochetCore = (function () {
     }
     // g equal arcs: each arc has big/g large groups then small/g small groups.
     return "*" + seg(q + 1, big / g) + ", " + seg(q, small / g) + "; rep from * " + g + " times";
+  }
+
+  // Adjust a round from `frm` to `to` stitches in one round, evenly and tail-free.
+  function evenAdjust(frm, to, stitch) {
+    if (to === frm) return stitch + " in each st around";
+    if (to < frm) {
+      var dec = frm - to;
+      // more than half removed can't be done with 2tog alone (needs 3tog+) — rare fallback
+      if (2 * dec > frm) return stitch + "2tog around, then " + stitch + " evenly to " + to + " sts";
+      // `dec` dividers (each a 2tog), with the frm − 2·dec plain sts spread between them
+      return spreadGroups(dec, frm - 2 * dec, stitch, stitch + "2tog");
+    }
+    var inc = to - frm;
+    if (inc >= frm) return "2 " + stitch + " in each st around, then " + stitch + " evenly to " + to + " sts";
+    // increases are the dividers; when near-doubling, the plain sts are the rarer
+    // side, so make them the dividers instead for the more natural phrasing.
+    return inc <= frm - inc
+      ? spreadGroups(inc, frm - inc, stitch, "2 " + stitch + " in next st")
+      : spreadGroups(frm - inc, inc, "2 " + stitch, stitch + " in next st");
   }
 
   function spotChart(diaCm, gapMult, stPerCm, rowPerCm) {
@@ -261,9 +281,17 @@ var CrochetCore = (function () {
 
     // 2. skirt
     var hemCirc = wbCirc * S.fullness;
-    var hemSts = jsround(hemCirc * hdc.st);
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
-    var skStart = jsround(waist * hdc.st);
+    // Skirt top rides the true waist (fit-critical): nudge to a rounder count but
+    // keep it within a stitch or two of the waist (well inside fit tolerance) and,
+    // where it can, sharing a factor with the band edge for a cleaner join round.
+    var skTol = 1.3;                                            // cm of allowed give
+    var skStart = niceCount(jsround(waist * hdc.st), wbEdge,
+      Math.ceil(waist * hdc.st - skTol * hdc.st), Math.floor(waist * hdc.st + skTol * hdc.st));
+    // Hem is a decorative flare with real slack: snap up to a clean count that
+    // continues cleanly from the skirt top.
+    var hemRaw = jsround(hemCirc * hdc.st);
+    var hemSts = niceCount(hemRaw, skStart, hemRaw - 3, hemRaw + 3);
     var skJoin = evenAdjust(wbEdge, skStart, "hdc");
     // ~4.5% per increase round → smaller, more frequent increases for a smoother A-line
     var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
@@ -349,9 +377,17 @@ var CrochetCore = (function () {
     // 5. sleeves — the cuff follows the same ribStyle as the waistband, then the
     // body is worked in the round identically from scCuff onward.
     var cuffSts = even(jsround((wrist + 2) * rib.st));
-    var scCuff = jsround((wrist + 2) * sc.st);
-    var balSts = jsround(upperArm * S.balloon * sc.st);
-    var topSts = jsround((upperArm + 4) * sc.st);
+    // Cuff opening rides the wrist (fit-critical): nudge to a rounder count within a
+    // stitch or two, sharing a factor with the rib count for a cleaner cuff join.
+    var scTol = 1.3, scRealCuff = (wrist + 2) * sc.st;
+    var scCuff = niceCount(jsround(scRealCuff), cuffSts,
+      Math.ceil(scRealCuff - scTol * sc.st), Math.floor(scRealCuff + scTol * sc.st));
+    // Balloon peak is decorative fullness with real slack — snap to a clean count.
+    var balRaw = jsround(upperArm * S.balloon * sc.st);
+    var balSts = niceCount(balRaw, scCuff * 2, balRaw - 3, balRaw + 3);
+    // Sleeve top has a little ease; nudge to a rounder count within a stitch or two.
+    var topRaw = jsround((upperArm + 4) * sc.st);
+    var topSts = niceCount(topRaw, balSts, topRaw - 2, topRaw + 2);
     var cuffRnds = Math.max(3, jsround(5 * rib.row));
     var cuffHeightSts = Math.max(6, jsround(cuffRnds * rib.st / rib.row));
     var cuffRowsAround = even(jsround((wrist + 2) * rib.row));
@@ -528,7 +564,11 @@ var CrochetCore = (function () {
     var warnings = [], pieces = [];
     var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
 
-    var headSts = even(jsround(headCirc * hdc.st));
+    // head circumference is fit-critical; nudge toward a rounder count (so the brim
+    // increases starting from headSts divide cleanly) but stay within fit tolerance.
+    var headReal = headCirc * hdc.st, headTol = 1.3;
+    var headSts = niceCount(even(jsround(headReal)), 0,
+      Math.ceil(headReal - headTol * hdc.st), Math.floor(headReal + headTol * hdc.st));
     var radius = headCirc / (2 * Math.PI);
     var crownRnds = Math.max(6, jsround(radius * hdc.row));
     var crownPlan = incPlan(8, headSts, crownRnds, "hdc", 1);
@@ -609,7 +649,9 @@ var CrochetCore = (function () {
     var warnings = [], pieces = [];
     var mapInc = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
 
-    var baseSts = even(jsround(Math.PI * diameter * hdc.st));
+    // the bag base has real slack — snap to a rounder count (cleaner eyelets, spots).
+    var baseRaw = even(jsround(Math.PI * diameter * hdc.st));
+    var baseSts = niceCount(baseRaw, 0, baseRaw - 3, baseRaw + 3);
     var baseRnds = Math.max(5, jsround((diameter / 2) * hdc.row));
     var basePlan = incPlan(8, baseSts, baseRnds, "hdc", 1);
     pieces.push({
@@ -677,21 +719,33 @@ var CrochetCore = (function () {
     var total = start - target;
     var out = { rounds: [], every: 0, finalCount: start };
     if (total <= 0) return out;
-    var chunk = Math.max(4, jsround(start * (chunkFrac || 0.08)));
-    var n = Math.max(1, jsround(total / chunk));
     var usable = Math.max(1, totalRnds - setupRnds - 1);
+    // mirror incPlan: remove a fixed `sub` per round that divides `start`, so every
+    // count stays a multiple of `sub` and each round is a clean repeat with no tail.
+    var minPer = Math.ceil(total / usable);
+    var desired = Math.min(total, Math.max(jsround(start * (chunkFrac || 0.08)), minPer));
+    var hiD = Math.max(1, Math.min(start - 1, total));
+    var sub = 1, bestAll = Infinity, subFits = 0, bestFits = Infinity;
+    for (var d = 1; d <= hiD; d++) {
+      if (start % d) continue;
+      var dist = Math.abs(d - desired);
+      if (dist < bestAll) { bestAll = dist; sub = d; }
+      if (d >= minPer && dist < bestFits) { bestFits = dist; subFits = d; }
+    }
+    if (subFits) sub = subFits;
+    var n = Math.max(1, Math.round(total / sub));
     if (n > usable) n = usable;
-    var per = Math.floor(total / n), rem = total - per * n;
     var cur = start, prevRnd = setupRnds;
     for (var i = 1; i <= n; i++) {
-      var sub = per + (i > n - rem ? 1 : 0);
       var before = cur;
+      // sub divides before, so this is one clean repeat with no leftover tail
+      var text = spreadGroups(sub, before - 2 * sub, stitch, stitch + "2tog");
       cur -= sub;
       var rnd = setupRnds + Math.round(i * usable / n);
       if (rnd <= prevRnd) rnd = prevRnd + 1;
       if (rnd > totalRnds) rnd = totalRnds;
       prevRnd = rnd;
-      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: evenAdjust(before, cur, stitch) });
+      out.rounds.push({ rnd: rnd, before: before, after: cur, sub: sub, text: text });
     }
     out.every = Math.max(1, Math.round(usable / n));
     out.finalCount = cur;
@@ -759,7 +813,11 @@ var CrochetCore = (function () {
     }
 
     // 2. hip yoke — waistband down to the crotch, waist → hip, sc in the round
-    var yokeTop = even(jsround(waist * sc.st * hug));
+    // waist is fit-critical; nudge toward a rounder count that also joins cleanly
+    // from the band edge and starts the yoke increases on a good divisor, within tol.
+    var yokeReal = waist * sc.st * hug, fitTol = 1.3;
+    var yokeTop = niceCount(even(jsround(yokeReal)), bandEdge,
+      Math.ceil(yokeReal - fitTol * sc.st), Math.floor(yokeReal + fitTol * sc.st));
     var yokeBot = even(jsround(hip * sc.st * hug));
     var riseRnds = Math.max(6, jsround(rise * sc.row));
     var yokeJoin = evenAdjust(bandEdge, yokeTop, "sc");
@@ -778,7 +836,11 @@ var CrochetCore = (function () {
 
     // 3. legs (make 2) — thigh → ankle taper, sc in the round
     var gusset = Math.max(4, even(jsround(4 * sc.st)));
-    var legStart = even(jsround(thigh * sc.st * hug)) + gusset;
+    // thigh has a little ease; nudge the leg start toward a rounder count so the
+    // taper decreases (which start from legStart) divide cleanly, within fit tol.
+    var legReal = thigh * sc.st * hug + gusset;
+    var legStart = niceCount(even(jsround(thigh * sc.st * hug)) + gusset, 0,
+      Math.ceil(legReal - 1.3 * sc.st), Math.floor(legReal + 1.3 * sc.st));
     var legBot = even(jsround(ankle * sc.st * hug));
     var legRnds = Math.max(8, jsround(inseam * sc.row));
     var legPlan = decPlan(legStart, legBot, legRnds, "sc", 2, 0.045);

@@ -58,11 +58,20 @@ test("zero or negative swatch size is rejected", () => {
 
 /* ---------------- shaping ---------------- */
 
-test("incPlan reaches its target exactly", () => {
+test("incPlan lands cleanly near its target with no leftover tail", () => {
   for (const [start, target, rounds] of [
-    [110, 221, 81], [42, 83, 36], [276, 552, 198], [62, 124, 135], [100, 101, 20],
+    [110, 221, 81], [42, 83, 36], [276, 552, 198], [62, 124, 135], [100, 101, 20], [114, 221, 56],
   ]) {
-    assert.equal(incPlan(start, target, rounds, "hdc", 1).finalCount, target, `${start}->${target}`);
+    const p = incPlan(start, target, rounds, "hdc", 1);
+    // every increase round divides evenly — no "hdc in each of last N sts" stub
+    for (const r of p.rounds) {
+      assert.ok(!/in each of last/.test(r.text), `tail in ${start}->${target}: ${r.text}`);
+      assert.equal(r.after - r.before, p.rounds[0].after - p.rounds[0].before, "constant add");
+    }
+    // finishes on a clean multiple within one increment of the requested width
+    const add = p.rounds.length ? p.rounds[0].after - p.rounds[0].before : 0;
+    assert.ok(p.finalCount >= start, `${start}->${target} not below start`);
+    assert.ok(Math.abs(p.finalCount - target) <= add, `${start}->${target} lands ${p.finalCount}`);
   }
 });
 
@@ -403,12 +412,49 @@ test("tights produce a mycelium set tagged kind:tights", () => {
   assert.equal(estimateYarn(r).total.meters > 0, true);
 });
 
-test("decPlan reaches its target exactly and never past the end", () => {
+test("decPlan lands cleanly near its target, no tail, never past the end", () => {
   for (let rounds = 6; rounds < 160; rounds += 9) {
     const p = decPlan(120, 40, rounds, "sc", 1);
-    assert.equal(p.finalCount, 40, `dec ${rounds}`);
+    for (const r of p.rounds) {
+      assert.ok(!/in each of last/.test(r.text), `tail: ${r.text}`);
+      assert.equal(r.before - r.after, p.rounds[0].before - p.rounds[0].after, "constant sub");
+    }
+    const sub = p.rounds.length ? p.rounds[0].before - p.rounds[0].after : 0;
+    assert.ok(Math.abs(p.finalCount - 40) <= sub, `dec ${rounds} lands ${p.finalCount}`);
     if (p.rounds.length) assert.ok(p.rounds[p.rounds.length - 1].rnd <= rounds);
   }
+});
+
+// The whole-engine guarantee: no shaping round anywhere leaves a leftover "in each
+// of last N sts" stub or a degenerate "next 0/1 sts", across every generator and a
+// wide grid of gauges and body sizes. A shaping round is one with a repeat (rep
+// from *) that works an increase (2 <st>) or decrease (<st>2tog).
+test("no shaping round anywhere leaves a leftover tail or degenerate count", () => {
+  const shaping = /rep from \*/;
+  const change = /2 (?:hdc|sc|dc) |(?:hdc|sc|dc)2tog/;
+  const tail = /in each of last \d+ sts/;
+  const degenerate = /in (?:each of )?next 0 sts|next -\d| 1 sts\b/;
+  const bad = [];
+  for (let waist = 58; waist <= 108; waist += 5) {
+    for (let st = 10; st <= 20; st++) {
+      for (let rw = 8; rw <= 14; rw += 3) {
+        const inp = defaultInput();
+        inp.body.waist = waist;
+        inp.gauges.hdc = { sts: st, rows: rw, width: 10, height: 10 };
+        inp.gauges.sc = { sts: st + 2, rows: rw + 6, width: 10, height: 10 };
+        for (const gen of [computePattern, computeHat, computeBag, computeTights]) {
+          let res;
+          try { res = gen(inp); } catch (e) { bad.push(`${gen.name} crashed @${waist}/${st}/${rw}: ${e.message}`); continue; }
+          for (const p of res.pieces) for (const s of p.steps || []) {
+            const txt = s[1];
+            if (shaping.test(txt) && change.test(txt) && tail.test(txt)) bad.push(`${gen.name}/${p.title || p.id}/${s[0]}: TAIL — ${txt}`);
+            if (degenerate.test(txt)) bad.push(`${gen.name}/${p.title || p.id}/${s[0]}: DEGENERATE — ${txt}`);
+          }
+        }
+      }
+    }
+  }
+  assert.equal(bad.length, 0, `${bad.length} messy shaping rounds, e.g.:\n  ${bad.slice(0, 4).join("\n  ")}`);
 });
 
 /* ---------------- visualization ---------------- */
