@@ -246,8 +246,15 @@ var CrochetCore = (function () {
     var bandCirc = Math.max(20, waist * (1 + bandEase));         // relaxed band circumference
     var wbRnds = Math.max(4, jsround(12 * rib.row));
     var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
-    var wbRowsAround = even(jsround(bandCirc * rib.row));                  // rows around = edge pickup count (sideways)
-    var wbSts = even(jsround(bandCirc * rib.st));                         // stitches around (in-the-round)
+    // The band edge is where the skirt joins. Give it small factors so the join
+    // round (band edge → skirt top) comes out as one clean repeat instead of a
+    // coprime jumble — the band has real slack (the pattern says add/remove rows to
+    // fit), so nudge the count toward a rounder one. Post rib stays even (fp/bp pairs).
+    var wbRowsRaw = even(jsround(bandCirc * rib.row));                     // rows around = edge pickup count (sideways)
+    var wbRowsAround = niceCount(wbRowsRaw, 0, Math.max(6, wbRowsRaw - 3), wbRowsRaw + 3);
+    var wbStsRaw = even(jsround(bandCirc * rib.st));                       // stitches around (in-the-round)
+    var wbSts = niceCount(wbStsRaw, 0, Math.max(6, wbStsRaw - 4), wbStsRaw + 4);
+    if (wbSts % 2) wbSts = wbStsRaw;                                       // post rib needs an even count
     // The band is worked first, then folded into the skirt piece (below) instead of
     // being fastened off on its own — after it you rotate/continue and work the skirt
     // straight down its edge, so band + skirt + hem frill read as one instruction.
