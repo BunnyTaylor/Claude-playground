@@ -246,22 +246,34 @@ var CrochetCore = (function () {
     var bandCirc = Math.max(20, waist * (1 + bandEase));         // relaxed band circumference
     var wbRnds = Math.max(4, jsround(12 * rib.row));
     var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
-    var wbRowsAround = even(jsround(bandCirc * rib.row));                  // rows around = edge pickup count (sideways)
-    var wbSts = even(jsround(bandCirc * rib.st));                         // stitches around (in-the-round)
+    // The band edge is where the skirt joins. Give it small factors so the join
+    // round (band edge → skirt top) comes out as one clean repeat instead of a
+    // coprime jumble — the band has real slack (the pattern says add/remove rows to
+    // fit), so nudge the count toward a rounder one. Post rib stays even (fp/bp pairs).
+    var wbRowsRaw = even(jsround(bandCirc * rib.row));                     // rows around = edge pickup count (sideways)
+    var wbRowsAround = niceCount(wbRowsRaw, 0, Math.max(6, wbRowsRaw - 3), wbRowsRaw + 3);
+    var wbStsRaw = even(jsround(bandCirc * rib.st));                       // stitches around (in-the-round)
+    var wbSts = niceCount(wbStsRaw, 0, Math.max(6, wbStsRaw - 4), wbStsRaw + 4);
+    if (wbSts % 2) wbSts = wbStsRaw;                                       // post rib needs an even count
     // The band is worked first, then folded into the skirt piece (below) instead of
     // being fastened off on its own — after it you rotate/continue and work the skirt
     // straight down its edge, so band + skirt + hem frill read as one instruction.
-    var wbEdge, wbEdgeLabel, bandSteps, bandCounts, bandStitch, bandSts;
+    // bandRnds / bandTrackStart drive the ROW COUNTER for the band portion (worked
+    // before the skirt): how many band rows/rounds to tick through, and the stitch
+    // count shown while you work them.
+    var wbEdge, wbEdgeLabel, bandSteps, bandCounts, bandStitch, bandSts, bandRnds, bandTrackStart;
     if (ribStyle === "sideways") {
       wbEdge = wbRowsAround;
       wbEdgeLabel = wbRowsAround + " row-ends";
       bandSts = wbHeightSts * wbRowsAround;
+      bandRnds = wbRowsAround;                                  // one counter tick per band row
+      bandTrackStart = wbHeightSts;                            // each row is the band's height in sts
       bandStitch = "sideways rib band, then A-line skirt in the round · rib + hdc";
       bandCounts = { style: "sideways", sts: wbRowsAround, rowsAround: wbRowsAround, heightSts: wbHeightSts, circumference: bandCirc };
       bandSteps = [
         ["Waistband — foundation", "In " + C.body + ", ch " + wbHeightSts + " — this is the band's HEIGHT, not its circumference, so there's no starting chain around your body to fight the stretch."],
         ["Waistband — rib rows", "Row 1: sc in 2nd ch from hook and each ch (" + wbHeightSts + " sc). Every row after: ch 1, turn, sc in back loop only across. The back-loop ridges make the rib."],
-        ["Waistband — length", "Work " + wbRowsAround + " rows. Relaxed the strip is about " + H(bandCirc) + " — deliberately smaller than your " + H(waist) + " waist, so the stretchy rib has to grip. It should need a firm stretch to close and stay put. Add/remove rows to fit (very stretchy yarn → fewer rows)."],
+        ["Waistband — length", "Work " + wbRowsAround + " rows (Rnds 1–" + wbRowsAround + " on the counter). Relaxed the strip is about " + H(bandCirc) + " — deliberately smaller than your " + H(waist) + " waist, so the stretchy rib has to grip. It should need a firm stretch to close and stay put. Add/remove rows to fit (very stretchy yarn → fewer rows)."],
         ["Waistband — seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it grips your waist and still pulls over your hips."],
         ["Turn for the skirt", "Do NOT fasten off. Rotate the band 90° and work the skirt straight down into the row-ends along one long edge — the next round sets the skirt's stitch count."]
       ];
@@ -269,6 +281,8 @@ var CrochetCore = (function () {
       wbEdge = wbSts;
       wbEdgeLabel = wbSts + " rib sts";
       bandSts = wbSts * wbRnds;
+      bandRnds = wbRnds;                                        // one counter tick per band round
+      bandTrackStart = wbSts;
       bandStitch = "rib band in the round, then A-line skirt · fpdc/bpdc + hdc";
       bandCounts = { style: "post", sts: wbSts, rounds: wbRnds, circumference: bandCirc };
       bandSteps = [
@@ -303,20 +317,26 @@ var CrochetCore = (function () {
     var frillFlare = evenAdjust(skPlan.finalCount, frillFull, "hdc");
     var frillShells = Math.floor(frillFull / 6);
     var frillFlareRnd = skRnds + 1, frillEndRnd = skRnds + 1 + frillRnds;
+    // The row counter spans the whole piece: band rows/rounds 1..bandRnds first
+    // (worked at the band's own stitch count), then the skirt & frill rounds, so the
+    // labelled "Rnd N" and the counter both include the waistband.
+    var B = bandRnds;
     pieces.push({
       id: "skirt", title: "Waistband, A-line skirt & hem frill", stitch: bandStitch,
-      counts: { start: skStart, hem: skPlan.finalCount, end: frillFull, shells: frillShells, rounds: frillEndRnd + 1, incRounds: skPlan.rounds.length, band: bandCounts },
-      progress: { total: frillEndRnd, start: skStart, end: frillFull,
-        incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }).concat([{ rnd: frillFlareRnd, count: frillFull }]) },
+      counts: { start: skStart, hem: skPlan.finalCount, end: frillFull, shells: frillShells, rounds: frillEndRnd + B, incRounds: skPlan.rounds.length, band: bandCounts },
+      progress: { total: frillEndRnd + B, start: bandTrackStart, end: frillFull,
+        incRounds: [{ rnd: B + 1, count: skStart }]
+          .concat(skPlan.rounds.map(function (x) { return { rnd: x.rnd + B, count: x.after }; }))
+          .concat([{ rnd: frillFlareRnd + B, count: frillFull }]) },
       extraYarn: [{ g: "rib", color: "body", sts: bandSts, title: "Waistband (rib)" }],
       steps: bandSteps.concat([
-        ["Skirt set-up (Rnd 1)", "Ch 2, " + skJoin + ", working into the band edge, join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
+        ["Skirt set-up (Rnd " + (B + 1) + ")", "Ch 2, " + skJoin + ", working into the band edge, join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
         ["Plain rnds", "Ch 2, hdc in each st around, join. Rep for every round not listed."]
-      ]).concat(skPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
+      ]).concat(skPlan.rounds.map(function (x) { return ["Rnd " + (x.rnd + B), "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
         .concat([
-          ["Hem (Rnd " + skRnds + ")", "Work plain to Rnd " + skRnds + " — do NOT fasten off; the frill continues straight down the same edge. (" + skPlan.finalCount + " hdc)"],
-          ["Frill flare (Rnd " + frillFlareRnd + ")", "Ch 2, " + frillFlare + ", join. (" + frillFull + " hdc)"],
-          ["Frill ruffle", "Ch 2, hdc in each st around, join. Rep to Rnd " + frillEndRnd + " so the frill ruffles. (" + frillFull + " hdc)"],
+          ["Hem (Rnd " + (skRnds + B) + ")", "Work plain to Rnd " + (skRnds + B) + " — do NOT fasten off; the frill continues straight down the same edge. (" + skPlan.finalCount + " hdc)"],
+          ["Frill flare (Rnd " + (frillFlareRnd + B) + ")", "Ch 2, " + frillFlare + ", join. (" + frillFull + " hdc)"],
+          ["Frill ruffle", "Ch 2, hdc in each st around, join. Rep to Rnd " + (frillEndRnd + B) + " so the frill ruffles. (" + frillFull + " hdc)"],
           ["Frill shell edge", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + frillShells + " shells)"],
           ["Finish", "Fasten off and block the frill open."]
         ])
