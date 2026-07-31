@@ -248,38 +248,37 @@ var CrochetCore = (function () {
     var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
     var wbRowsAround = even(jsround(bandCirc * rib.row));                  // rows around = edge pickup count (sideways)
     var wbSts = even(jsround(bandCirc * rib.st));                         // stitches around (in-the-round)
-    var wbEdge, wbPiece;
+    // The band is worked first, then folded into the skirt piece (below) instead of
+    // being fastened off on its own — after it you rotate/continue and work the skirt
+    // straight down its edge, so band + skirt + hem frill read as one instruction.
+    var wbEdge, wbEdgeLabel, bandSteps, bandCounts, bandStitch, bandSts;
     if (ribStyle === "sideways") {
       wbEdge = wbRowsAround;
-      wbPiece = {
-        id: "waistband", title: "Fitted waistband", stitch: "sideways · back-loop rib, seamed",
-        counts: { sts: wbRowsAround, heightSts: wbHeightSts, rowsAround: wbRowsAround, circumference: bandCirc },
-        progress: { total: wbRowsAround, start: wbHeightSts, end: wbHeightSts, incRounds: [] },
-        steps: [
-          ["Foundation", "Ch " + wbHeightSts + " — this is the band's height, not its circumference, so there's no starting chain around your body to fight the stretch."],
-          ["Rib rows", "Row 1: sc in 2nd ch from hook and each ch (" + wbHeightSts + " sc). Every row after: ch 1, turn, sc in back loop only across. The back-loop ridges make the rib."],
-          ["Length", "Work " + wbRowsAround + " rows. Relaxed the strip is about " + H(bandCirc) + " — deliberately smaller than your " + H(waist) + " waist, so the stretchy rib has to grip. Try it around you: it should need a firm stretch to close and stay put with no help. Add/remove rows to fit (very stretchy yarn → fewer rows)."],
-          ["Seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it grips your waist and still pulls over your hips before continuing."],
-          ["Finish", "Fasten off. The skirt is worked into the row-ends along one long edge (next piece)."]
-        ]
-      };
+      wbEdgeLabel = wbRowsAround + " row-ends";
+      bandSts = wbHeightSts * wbRowsAround;
+      bandStitch = "sideways rib band, then A-line skirt in the round · rib + hdc";
+      bandCounts = { style: "sideways", sts: wbRowsAround, rowsAround: wbRowsAround, heightSts: wbHeightSts, circumference: bandCirc };
+      bandSteps = [
+        ["Waistband — foundation", "In " + C.body + ", ch " + wbHeightSts + " — this is the band's HEIGHT, not its circumference, so there's no starting chain around your body to fight the stretch."],
+        ["Waistband — rib rows", "Row 1: sc in 2nd ch from hook and each ch (" + wbHeightSts + " sc). Every row after: ch 1, turn, sc in back loop only across. The back-loop ridges make the rib."],
+        ["Waistband — length", "Work " + wbRowsAround + " rows. Relaxed the strip is about " + H(bandCirc) + " — deliberately smaller than your " + H(waist) + " waist, so the stretchy rib has to grip. It should need a firm stretch to close and stay put. Add/remove rows to fit (very stretchy yarn → fewer rows)."],
+        ["Waistband — seam", "Join the first and last rows into a ring (mattress st or sc seam). Test it grips your waist and still pulls over your hips."],
+        ["Turn for the skirt", "Do NOT fasten off. Rotate the band 90° and work the skirt straight down into the row-ends along one long edge — the next round sets the skirt's stitch count."]
+      ];
     } else {
       wbEdge = wbSts;
-      wbPiece = {
-        id: "waistband", title: "Fitted waistband", stitch: "in the round · fpdc/bpdc rib",
-        counts: { sts: wbSts, rounds: wbRnds, circumference: bandCirc },
-        progress: { total: wbRnds, start: wbSts, end: wbSts, incRounds: [] },
-        steps: [
-          ["Foundation (stretchy start)", "Work " + wbSts + " foundation sc (fsc) and join into a ring, not twisting — a foundation row stretches with the rib; a starting chain won't clear your hips."],
-          ["Rnd 1", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. (" + wbSts + " sts)"],
-          ["Rnds 2–" + wbRnds, "Rep Rnd 1."],
-          ["Finish", "Fasten off. Test it stretches over your hips before crocheting the skirt."]
-        ]
-      };
+      wbEdgeLabel = wbSts + " rib sts";
+      bandSts = wbSts * wbRnds;
+      bandStitch = "rib band in the round, then A-line skirt · fpdc/bpdc + hdc";
+      bandCounts = { style: "post", sts: wbSts, rounds: wbRnds, circumference: bandCirc };
+      bandSteps = [
+        ["Waistband — foundation (stretchy start)", "In " + C.body + ", work " + wbSts + " foundation sc (fsc) and join into a ring, not twisting — a foundation row stretches with the rib; a starting chain won't clear your hips."],
+        ["Waistband — rib", "Ch 2, *fpdc in next st, bpdc in next st; rep from * around, join. Rep to Rnd " + wbRnds + ". (" + wbSts + " sts)"],
+        ["Down to the skirt", "Do NOT fasten off — continue straight down into the skirt below; the next round sets the skirt's stitch count."]
+      ];
     }
-    pieces.push(wbPiece);
 
-    // 2. skirt
+    // 2. skirt (with the waistband folded in above it and the hem frill below)
     var hemCirc = wbCirc * S.fullness;
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
     // Skirt top rides the true waist (fit-critical): nudge to a rounder count but
@@ -295,18 +294,32 @@ var CrochetCore = (function () {
     var skJoin = evenAdjust(wbEdge, skStart, "hdc");
     // ~4.5% per increase round → smaller, more frequent increases for a smoother A-line
     var skPlan = incPlan(skStart, hemSts, skRnds, "hdc", 1, 0.045);
-    var wbEdgeLabel = ribStyle === "sideways" ? wbEdge + " row-ends" : wbEdge + " rib sts";
     if (hemSts <= skStart) warnings.push("Hem is no wider than the waist — raise fullness or check hdc gauge.");
+    // Hem frill worked STRAIGHT onto the bottom of the skirt — same body colour, no
+    // separate join. Flare once to a fuller ruffle (a multiple of 6 for the shell
+    // edging), ruffle straight for a few rounds, then a shell edge.
+    var frillFull = mult(jsround(skPlan.finalCount * 1.6), 6);
+    var frillRnds = Math.max(4, jsround(9 * hdc.row));
+    var frillFlare = evenAdjust(skPlan.finalCount, frillFull, "hdc");
+    var frillShells = Math.floor(frillFull / 6);
+    var frillFlareRnd = skRnds + 1, frillEndRnd = skRnds + 1 + frillRnds;
     pieces.push({
-      id: "skirt", title: "A-line skirt", stitch: "in the round, downward · hdc",
-      counts: { start: skStart, end: skPlan.finalCount, rounds: skRnds, incRounds: skPlan.rounds.length },
-      progress: { total: skRnds, start: skStart, end: skPlan.finalCount,
-        incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }) },
-      steps: [
-        ["Set-up", "Join to the lower edge of the waistband. Ch 2, " + skJoin + ", join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
+      id: "skirt", title: "Waistband, A-line skirt & hem frill", stitch: bandStitch,
+      counts: { start: skStart, hem: skPlan.finalCount, end: frillFull, shells: frillShells, rounds: frillEndRnd + 1, incRounds: skPlan.rounds.length, band: bandCounts },
+      progress: { total: frillEndRnd, start: skStart, end: frillFull,
+        incRounds: skPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }).concat([{ rnd: frillFlareRnd, count: frillFull }]) },
+      extraYarn: [{ g: "rib", color: "body", sts: bandSts, title: "Waistband (rib)" }],
+      steps: bandSteps.concat([
+        ["Skirt set-up (Rnd 1)", "Ch 2, " + skJoin + ", working into the band edge, join. (" + wbEdgeLabel + " → " + skStart + " hdc)"],
         ["Plain rnds", "Ch 2, hdc in each st around, join. Rep for every round not listed."]
-      ].concat(skPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
-        .concat([["Finish", "Work plain to Rnd " + skRnds + ". Fasten off. (" + skPlan.finalCount + " hdc)"]])
+      ]).concat(skPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 2, " + x.text + ", join. (" + x.after + " hdc)"]; }))
+        .concat([
+          ["Hem (Rnd " + skRnds + ")", "Work plain to Rnd " + skRnds + " — do NOT fasten off; the frill continues straight down the same edge. (" + skPlan.finalCount + " hdc)"],
+          ["Frill flare (Rnd " + frillFlareRnd + ")", "Ch 2, " + frillFlare + ", join. (" + frillFull + " hdc)"],
+          ["Frill ruffle", "Ch 2, hdc in each st around, join. Rep to Rnd " + frillEndRnd + " so the frill ruffles. (" + frillFull + " hdc)"],
+          ["Frill shell edge", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + frillShells + " shells)"],
+          ["Finish", "Fasten off and block the frill open."]
+        ])
     });
 
     // 3. flounce
@@ -314,16 +327,30 @@ var CrochetCore = (function () {
     var flBot = jsround(flTop * S.flare);
     var flRnds = Math.max(5, jsround(16 * sc.row));
     var flPlan = incPlan(flTop, flBot, flRnds, "sc", 1);
+    // gill frill worked straight onto the flounce's lower edge (colour change to body),
+    // folded into this piece instead of being a separate join-on frill.
+    var gillBase = mult(flPlan.finalCount, 6);                  // multiple of 6 for the shells
+    var gillRnds = Math.max(4, jsround(5 * sc.row));
+    var gillShells = Math.floor(gillBase / 6);
+    var gillAdjust = evenAdjust(flPlan.finalCount, gillBase, "sc");
     pieces.push({
-      id: "flounce", title: "Off-shoulder flounce", stitch: "in the round · sc tapestry",
-      counts: { start: flTop, end: flPlan.finalCount, rounds: flRnds },
+      id: "flounce", title: "Off-shoulder flounce + gill frill", stitch: "in the round · sc tapestry, shell edge",
+      counts: { start: flTop, end: flPlan.finalCount, gill: gillBase, shells: gillShells, rounds: flRnds + gillRnds + 2 },
       progress: { total: flRnds, start: flTop, end: flPlan.finalCount,
         incRounds: flPlan.rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }) },
+      extraYarn: [{ g: "sc", color: "body", sts: gillBase * (gillRnds + 2), title: "Gill frill" }],
       steps: [
         ["Foundation", "In " + C.cap + ", ch " + flTop + ". Join to form a ring, not twisting."],
         ["Rnd 1", "Ch 1, sc in each ch around, join. (" + flTop + " sc)"]
       ].concat(flPlan.rounds.map(function (x) { return ["Rnd " + x.rnd, "Ch 1, " + x.text + ", join. (" + x.after + " sc)"]; }))
-        .concat([["Finish", "Work plain to Rnd " + flRnds + ". Thread elastic through Rnd 1. (" + flPlan.finalCount + " sc)"]])
+        .concat([
+          ["Flounce finish", "Work plain to Rnd " + flRnds + ". Thread elastic through Rnd 1 so it sits off the shoulder. (" + flPlan.finalCount + " sc)"],
+          ["Gill frill — set up", "Change to " + C.body + " at the flounce's lower edge (don't fasten off). Ch 1, " + gillAdjust + ", join. (" + gillBase + " sc — a multiple of 6)"],
+          ["Gill frill — body", "Ch 1, sc in each st around, join. Rep to Rnd " + (flRnds + gillRnds) + "."],
+          ["Gill frill — shells", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + gillShells + " shells)"],
+          ["Gill frill — picots", "Ch 1, *sc, (ch 3, sl st in 3rd ch from hook), sc; rep from * around, join."],
+          ["Finish", "Fasten off and block so the shells open."]
+        ])
     });
 
     // 4. spots
@@ -445,46 +472,16 @@ var CrochetCore = (function () {
       });
     }
 
-    // 6. gill frill
-    var gillBase = mult(flPlan.finalCount, 6);
-    var gillRnds = Math.max(4, jsround(5 * sc.row));
-    pieces.push({
-      id: "gillFrill", title: "Gill frill (under flounce)", stitch: "in the round · shell edging",
-      counts: { base: gillBase, rounds: gillRnds + 2, shells: Math.floor(gillBase / 6) },
-      progress: { total: gillRnds + 2, start: gillBase, end: gillBase, incRounds: [] },
-      steps: [
-        ["Set-up", "In " + C.body + ", join to the flounce edge. Sc evenly around to " + gillBase + " sc (multiple of 6). Join."],
-        ["Body", "Ch 1, sc around, join. Rep to Rnd " + gillRnds + "."],
-        ["Shells", "Ch 1, *sc in next st, sk 2, 5 dc in next st, sk 2; rep from * around, join. (" + Math.floor(gillBase / 6) + " shells)"],
-        ["Picots", "Ch 1, *sc, (ch 3, sl st in 3rd ch from hook), sc; rep from * around, join."],
-        ["Finish", "Fasten off and block so the shells open."]
-      ]
-    });
+    // (the gill frill is now worked straight onto the flounce above — see piece 3;
+    //  the hem frill is worked straight onto the skirt — see piece 2)
 
-    // 7. hem frill
-    var frillBase = mult(skPlan.finalCount, 6);
-    var frillFull = jsround(frillBase * 1.6);
-    var frillRnds = Math.max(5, jsround(9 * hdc.row));
-    pieces.push({
-      id: "hemFrill", title: "Skirt hem frill", stitch: "in the round · hdc + shells",
-      counts: { base: frillBase, full: frillFull, rounds: frillRnds + 2 },
-      progress: { total: frillRnds + 2, start: frillBase, end: frillFull, incRounds: [{ rnd: 2, count: frillFull }] },
-      steps: [
-        ["Set-up", "In " + C.body + ", join to the skirt hem. Hdc evenly around to " + frillBase + " hdc (multiple of 6). Join."],
-        ["Flare", "Ch 2, *hdc in next 2 sts, 2 hdc in next; rep from * around, join. (" + frillFull + " hdc)"],
-        ["Body", "Ch 2, hdc around, join. Rep to Rnd " + frillRnds + "."],
-        ["Shells", "Ch 1, *sc, sk 2, 5 dc in next st, sk 2; rep from * around, join."],
-        ["Finish", "Fasten off and block the frill open."]
-      ]
-    });
-
-    // 8. mushroom border
+    // 6. mushroom border
     var motifs = Math.max(6, jsround(hemCirc / 7));
     pieces.push({
       id: "border", title: "Mushroom border", stitch: "surface embroidery",
       counts: { motifs: motifs, spacing: hemCirc / motifs },
       steps: [
-        ["Placement", "Mark " + motifs + " points around the skirt, ~" + H(hemCirc / motifs) + " apart, above the frill join."],
+        ["Placement", "Mark " + motifs + " points around the skirt, ~" + H(hemCirc / motifs) + " apart, above the hem frill."],
         ["Caps", "Embroider a cap and stem at each in " + C.cap + ", surface slip stitch or duplicate stitch."],
         ["Spots", "Tiny " + C.spot + " French knots on each cap."],
         ["Timing", "AFTER the skirt is finished and blocked — embroidering as you go distorts the increase rounds."]
@@ -900,7 +897,7 @@ var CrochetCore = (function () {
     var spec = {
       waistband: ["rib", "rib", "body"], skirt: ["hdc", "hdc", "body"],
       flounce: ["sc", "sc", "cap"], sleeves: ["sc", "sc", "cap"],
-      gillFrill: ["sc", "sc", "body"], hemFrill: ["hdc", "hdc", "body"], straps: ["sc", "sc", "cap"]
+      straps: ["sc", "sc", "cap"]
     };
     function totalSts(piece) {
       var pr = piece.progress;
@@ -930,10 +927,20 @@ var CrochetCore = (function () {
         return; // non-yarn piece (spots, border, drawstring notes)
       }
       var cm = sts * (1.0 / dens[g].st) * factor[g] * (p.makeCount || 1) * waste;
-      if (!(cm > 0)) return;
-      colorCm[ck] += cm;
-      if (ck === "cap") spottedCm += cm;
-      piecesOut.push({ id: p.id, title: p.title, color: ck, meters: Math.round(cm / 100 * 10) / 10, yards: Math.round(cm / 100 * yd * 10) / 10 });
+      if (cm > 0) {
+        colorCm[ck] += cm;
+        if (ck === "cap") spottedCm += cm;
+        piecesOut.push({ id: p.id, title: p.title, color: ck, meters: Math.round(cm / 100 * 10) / 10, yards: Math.round(cm / 100 * yd * 10) / 10 });
+      }
+      // extra yarn segments for consolidated pieces worked in more than one gauge or
+      // colour (e.g. the rib band folded into the skirt, the body gill on the flounce)
+      (p.extraYarn || []).forEach(function (ex) {
+        var xcm = ex.sts * (1.0 / dens[ex.g].st) * factor[ex.g] * (p.makeCount || 1) * waste;
+        if (!(xcm > 0)) return;
+        colorCm[ex.color] += xcm;
+        if (ex.color === "cap") spottedCm += xcm;
+        piecesOut.push({ id: p.id + ":" + ex.g, title: ex.title || (p.title + " (extra)"), color: ex.color, meters: Math.round(xcm / 100 * 10) / 10, yards: Math.round(xcm / 100 * yd * 10) / 10 });
+      });
     });
     var spotCm = spottedCm * 0.15;
     colorCm.spot += spotCm;

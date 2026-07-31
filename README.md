@@ -162,11 +162,15 @@ through any refactor:
 - skirt-top circumference lands within 1.5 cm of the true waist
 - cm and inch inputs for the same body produce the same pattern (±2 sts)
 
-Known-good default output: skirt 104 → 192 hdc, 50 rnds; flounce 134 → 241 sc,
-29 rnds; spots 4 × 5, repeat 9 × 10; sleeves 30 → 66 balloon → 54 top. Decorative
+Known-good default output: skirt 104 → 192 hdc over 50 rnds, then the hem frill is
+worked straight on (no separate join): flare 192 → 306, ruffle, 51-shell edge;
+flounce 134 → 241 sc, 29 rnds; spots 4 × 5, repeat 9 × 10; sleeves 30 → 66 balloon
+→ 54 top. The dress is **six** cohesive pieces: the waistband and hem frill fold
+into the skirt (band worked first, then rotate/continue and work the skirt straight
+down its edge, then the frill), and the gill frill folds into the flounce. Decorative
 counts (hem, balloon) snap to round numbers and fit-critical counts (skirt top,
 cuff) nudge a stitch or two toward one, staying inside the fit tolerance, so
-shaping rounds land cleanly (e.g. the balloon join is a single ×6 repeat). The waistband
+shaping rounds land cleanly (e.g. the balloon join is a single ×6 repeat). The band
 depends on the ribbing style — **sideways** (default) is 58 rows around × 22
 tall; the **in-the-round** option is 124 sts × 11 rnds. If a refactor changes
 these, something broke.
@@ -212,7 +216,7 @@ const result = Core.computePattern({
   colors: { cap: "Crimson", spot: "Ivory", body: "Oat" },
 });
 
-result.pieces      // nine pieces in construction order (each: id, title,
+result.pieces      // six pieces in construction order (each: id, title,
                    //   stitch, counts, steps, and progress for the row counter)
 result.warnings    // fit warnings the maker needs
 result.meta        // densities, key circumferences, resolved colours

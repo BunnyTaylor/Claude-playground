@@ -206,19 +206,21 @@ test("mult never returns less than one repeat", () => {
 
 /* ---------------- whole pattern ---------------- */
 
-test("produces all nine pieces in construction order", () => {
+test("produces all six pieces in construction order (band + hem frill fold into the skirt, gill into the flounce)", () => {
   const { pieces } = computePattern(DEFAULT_INPUT);
   assert.deepEqual(pieces.map((p) => p.id),
-    ["waistband", "skirt", "flounce", "spots", "sleeves", "gillFrill", "hemFrill", "border", "straps"]);
+    ["skirt", "flounce", "spots", "sleeves", "border", "straps"]);
 });
 
 test("waistband stitch count is even", () => {
-  assert.equal(computePattern(DEFAULT_INPUT).pieces[0].counts.sts % 2, 0);
+  const skirt = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "skirt");
+  assert.equal(skirt.counts.band.sts % 2, 0);
 });
 
 test("skirt top lands at the true waist, not the compressed band", () => {
   const { pieces, meta } = computePattern(DEFAULT_INPUT);
-  const topCm = pieces[1].counts.start / meta.density.hdc.st;
+  const skirt = pieces.find((p) => p.id === "skirt");
+  const topCm = skirt.counts.start / meta.density.hdc.st;
   assert.ok(Math.abs(topCm - DEFAULT_INPUT.body.waist) < 1.5, `skirt top ${topCm}cm`);
 });
 
@@ -228,9 +230,9 @@ test("each gauge affects only its own pieces", () => {
   bumped.gauges.sc.sts = 22;
   const after = computePattern(bumped);
   const id = (res, k) => res.pieces.find((p) => p.id === k);
-  assert.equal(id(base, "waistband").counts.sts, id(after, "waistband").counts.sts);
-  assert.equal(id(base, "skirt").counts.start, id(after, "skirt").counts.start);
-  assert.notEqual(id(base, "flounce").counts.start, id(after, "flounce").counts.start);
+  assert.equal(id(base, "skirt").counts.band.sts, id(after, "skirt").counts.band.sts);  // rib band, unaffected by sc gauge
+  assert.equal(id(base, "skirt").counts.start, id(after, "skirt").counts.start);         // hdc skirt, unaffected by sc gauge
+  assert.notEqual(id(base, "flounce").counts.start, id(after, "flounce").counts.start);  // sc flounce, does change
 });
 
 test("every piece has steps and a title", () => {
@@ -266,7 +268,8 @@ test("inches and centimetres describe the same garment", () => {
   for (const g of Object.values(inch.gauges)) { g.width /= 2.54; g.height /= 2.54; }
   inch.style.dotDia /= 2.54;
   const res = computePattern(inch);
-  assert.ok(Math.abs(cm.pieces[0].counts.sts - res.pieces[0].counts.sts) <= 2);
+  const skStart = (r) => r.pieces.find((p) => p.id === "skirt").counts.start;
+  assert.ok(Math.abs(skStart(cm) - skStart(res)) <= 2);
 });
 
 /* ---------------- multi-size spots ---------------- */
@@ -299,7 +302,7 @@ test("multiple dot sizes produce a charts palette only on spots", () => {
 
 test("progress end matches counts and stays in bounds", () => {
   const pieces = computePattern(DEFAULT_INPUT).pieces.filter((p) => p.progress);
-  for (const id of ["waistband", "skirt", "flounce", "sleeves", "gillFrill", "hemFrill"]) {
+  for (const id of ["skirt", "flounce", "sleeves"]) {
     assert.ok(pieces.find((p) => p.id === id), id);
   }
   for (const p of pieces) {
@@ -332,7 +335,7 @@ test("sleeveless and strapless omit their pieces", () => {
   const res = computePattern(inp);
   const ids = res.pieces.map((p) => p.id);
   assert.ok(!ids.includes("sleeves") && !ids.includes("straps"));
-  assert.deepEqual(ids, ["waistband", "skirt", "flounce", "spots", "gillFrill", "hemFrill", "border"]);
+  assert.deepEqual(ids, ["skirt", "flounce", "spots", "border"]);
   assert.ok(res.warnings.some((w) => /strapless/i.test(w)));
 });
 
@@ -356,13 +359,13 @@ test("UK terms convert stitch names without corrupting compounds", () => {
 
 /* ---------------- ribbing construction ---------------- */
 
-test("default ribbing is sideways (back-loop), seamed into a ring", () => {
-  const wb = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "waistband");
-  assert.match(wb.stitch, /sideways/);
+test("default ribbing is sideways (back-loop), seamed, folded into the skirt", () => {
+  const skirt = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "skirt");
+  assert.match(skirt.stitch, /sideways/);
   // sized by rows-around (~ waistCirc x row gauge), not stitches-around
-  assert.equal(wb.counts.rowsAround, wb.counts.sts);
-  assert.ok(wb.counts.heightSts >= 6);
-  const joined = wb.steps.map((s) => s[1]).join(" ");
+  assert.equal(skirt.counts.band.rowsAround, skirt.counts.band.sts);
+  assert.ok(skirt.counts.band.heightSts >= 6);
+  const joined = skirt.steps.map((s) => s[1]).join(" ");
   assert.match(joined, /back loop only/);
   assert.ok(!/fpdc/.test(joined));  // no post-stitch rib in sideways mode
 });
@@ -371,14 +374,13 @@ test("post rib option restores in-the-round fpdc/bpdc with the same skirt top", 
   const inp = structuredClone(DEFAULT_INPUT);
   inp.style.ribStyle = "post";
   const res = computePattern(inp);
-  const wb = res.pieces.find((p) => p.id === "waistband");
-  assert.match(wb.stitch, /in the round/);
-  assert.ok(wb.counts.sts % 2 === 0);
-  assert.match(wb.steps.map((s) => s[1]).join(" "), /fpdc/);
+  const skirt = res.pieces.find((p) => p.id === "skirt");
+  assert.match(skirt.stitch, /in the round/);
+  assert.ok(skirt.counts.band.sts % 2 === 0);
+  assert.match(skirt.steps.map((s) => s[1]).join(" "), /fpdc/);
   // the skirt still lands at the true waist regardless of rib style
   const sideways = computePattern(DEFAULT_INPUT).pieces.find((p) => p.id === "skirt");
-  const post = res.pieces.find((p) => p.id === "skirt");
-  assert.equal(sideways.counts.start, post.counts.start);
+  assert.equal(sideways.counts.start, skirt.counts.start);
 });
 
 test("both rib modes keep every piece's progress end exact", () => {
