@@ -42,6 +42,26 @@ var CrochetCore = (function () {
     }
     return best;
   };
+  // Jointly pick a (fromCount, toCount) pair — each within its own [lo, hi] window —
+  // whose adjustment round is a SINGLE clean repeat (no arcs, no leftover), so a join
+  // like band edge → skirt top reads as one "*…; rep" line. Prefers the least
+  // movement, weighting the `to` side more (it is usually the fit-critical one).
+  // Returns { from, to } or null when no single-block pair exists in range.
+  var joinPair = function (rawFrom, fLo, fHi, rawTo, tLo, tHi, evenFrom) {
+    var best = null, bestCost = Infinity;
+    for (var f = Math.max(6, fLo); f <= fHi; f++) {
+      if (evenFrom && (f % 2)) continue;
+      for (var t = tLo; t <= tHi; t++) {
+        if (t === f) continue;
+        var txt = evenAdjust(f, t, "hdc");
+        if ((txt.match(/rep from \*/g) || []).length !== 1) continue;   // exactly one repeated block
+        if (txt.indexOf("(") >= 0 || txt.indexOf("evenly") >= 0) continue;  // no arcs / fallback
+        var cost = Math.abs(f - rawFrom) + 2 * Math.abs(t - rawTo);
+        if (cost < bestCost) { bestCost = cost; best = { from: f, to: t }; }
+      }
+    }
+    return best;
+  };
 
   function density(g, unit) {
     var w = toCm(g.width, unit), h = toCm(g.height, unit);
@@ -246,15 +266,25 @@ var CrochetCore = (function () {
     var bandCirc = Math.max(20, waist * (1 + bandEase));         // relaxed band circumference
     var wbRnds = Math.max(4, jsround(12 * rib.row));
     var wbHeightSts = Math.max(6, jsround(wbRnds * rib.st / rib.row));    // band height in sts (sideways)
-    // The band edge is where the skirt joins. Give it small factors so the join
-    // round (band edge → skirt top) comes out as one clean repeat instead of a
-    // coprime jumble — the band has real slack (the pattern says add/remove rows to
-    // fit), so nudge the count toward a rounder one. Post rib stays even (fp/bp pairs).
-    var wbRowsRaw = even(jsround(bandCirc * rib.row));                     // rows around = edge pickup count (sideways)
-    var wbRowsAround = niceCount(wbRowsRaw, 0, Math.max(6, wbRowsRaw - 3), wbRowsRaw + 3);
-    var wbStsRaw = even(jsround(bandCirc * rib.st));                       // stitches around (in-the-round)
-    var wbSts = niceCount(wbStsRaw, 0, Math.max(6, wbStsRaw - 4), wbStsRaw + 4);
-    if (wbSts % 2) wbSts = wbStsRaw;                                       // post rib needs an even count
+    // The band edge is where the skirt joins. Rather than nudge the band edge and
+    // the skirt top independently, tune them JOINTLY so their join round is a single
+    // clean repeat: the band edge has slack (the pattern says add/remove rows to
+    // fit) and the skirt top has ~1.3 cm of fit give, so search both windows for the
+    // pair whose join is one "*…; rep" line, closest to the raw counts (skirt top
+    // weighted more — it rides the true waist). Post rib keeps an even band edge.
+    var skRaw = jsround(waist * hdc.st), skTol = 1.3;
+    var skLo = Math.ceil(waist * hdc.st - skTol * hdc.st), skHi = Math.floor(waist * hdc.st + skTol * hdc.st);
+    var edgeRaw = ribStyle === "sideways" ? even(jsround(bandCirc * rib.row)) : even(jsround(bandCirc * rib.st));
+    var jp = joinPair(edgeRaw, edgeRaw - 4, edgeRaw + 4, skRaw, skLo, skHi, ribStyle === "post");
+    var wbEdgeCount, skStart;
+    if (jp) { wbEdgeCount = jp.from; skStart = jp.to; }
+    else {                                                                // no single-block pair — nudge each toward round
+      wbEdgeCount = niceCount(edgeRaw, 0, Math.max(6, edgeRaw - 3), edgeRaw + 3);
+      if (ribStyle === "post" && wbEdgeCount % 2) wbEdgeCount = edgeRaw;
+      skStart = niceCount(skRaw, wbEdgeCount, skLo, skHi);
+    }
+    var wbRowsAround = ribStyle === "sideways" ? wbEdgeCount : even(jsround(bandCirc * rib.row));
+    var wbSts = ribStyle === "post" ? wbEdgeCount : even(jsround(bandCirc * rib.st));
     // The band is worked first, then folded into the skirt piece (below) instead of
     // being fastened off on its own — after it you rotate/continue and work the skirt
     // straight down its edge, so band + skirt + hem frill read as one instruction.
@@ -292,15 +322,11 @@ var CrochetCore = (function () {
       ];
     }
 
-    // 2. skirt (with the waistband folded in above it and the hem frill below)
+    // 2. skirt (with the waistband folded in above it and the hem frill below).
+    // skStart (the skirt top) was chosen jointly with the band edge above so the
+    // join is a single clean repeat; here we just use it.
     var hemCirc = wbCirc * S.fullness;
     var skRnds = Math.max(6, jsround(skirtLen * hdc.row));
-    // Skirt top rides the true waist (fit-critical): nudge to a rounder count but
-    // keep it within a stitch or two of the waist (well inside fit tolerance) and,
-    // where it can, sharing a factor with the band edge for a cleaner join round.
-    var skTol = 1.3;                                            // cm of allowed give
-    var skStart = niceCount(jsround(waist * hdc.st), wbEdge,
-      Math.ceil(waist * hdc.st - skTol * hdc.st), Math.floor(waist * hdc.st + skTol * hdc.st));
     // Hem is a decorative flare with real slack: snap up to a clean count that
     // continues cleanly from the skirt top.
     var hemRaw = jsround(hemCirc * hdc.st);
