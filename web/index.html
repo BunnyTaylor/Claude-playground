@@ -106,20 +106,19 @@
         <div id="gaugeDerived" class="gnote"></div>
 
         <div class="group-label">Colours &amp; spots</div>
-        <p class="gnote" style="margin:-2px 0 9px">Pick a colour for each role from your selected swatches (or type your own).</p>
+        <p class="gnote" style="margin:-2px 0 9px">Pick a colour for each role from your selected swatches’ colours.</p>
         <div class="crow">
           <input type="color" id="capCol" value="#B83A2B">
-          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" list="swColorList" placeholder="pick or type a colour…"></div>
+          <div><div class="clab">Cap — flounce, sleeves</div><select id="capName"></select></div>
         </div>
         <div class="crow">
           <input type="color" id="spotCol" value="#FCF8EF">
-          <div><div class="clab">Spots</div><input type="text" id="spotName" list="swColorList" placeholder="pick or type a colour…"></div>
+          <div><div class="clab">Spots</div><select id="spotName"></select></div>
         </div>
         <div class="crow">
           <input type="color" id="bodyCol" value="#F2E4C9">
-          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" list="swColorList" placeholder="pick or type a colour…"></div>
+          <div><div class="clab">Body — skirt, frills</div><select id="bodyName"></select></div>
         </div>
-        <datalist id="swColorList"></datalist>
         <div class="two">
           <div class="field">
             <label>Spot sizes <span class="hint">cm/in, comma-separated</span></label>

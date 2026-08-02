@@ -120,9 +120,13 @@ function apply(state) {
   for (const b of BODY) if (input.body && input.body[b] != null) $(b).value = input.body[b];
 
   $("pName").value = (ui && ui.name) || "";
-  $("capName").value = input.colors.cap === "cap colour" ? "" : input.colors.cap;
-  $("spotName").value = input.colors.spot === "spot colour" ? "" : input.colors.spot;
-  $("bodyName").value = input.colors.body === "body colour" ? "" : input.colors.body;
+  // restore the colour dropdowns (add the saved value as an option if the swatch it
+  // came from isn't selected/around), and mirror into the pickers
+  rebuildColorSelects({
+    capName: input.colors.cap === "cap colour" ? "" : input.colors.cap,
+    spotName: input.colors.spot === "spot colour" ? "" : input.colors.spot,
+    bodyName: input.colors.body === "body colour" ? "" : input.colors.body,
+  });
 
   // prefer the exact strings the user picked (ui.*) so option values match precisely
   // (e.g. "2.0" doesn't round-trip through the number 2); fall back to the style value
@@ -337,7 +341,7 @@ function populateGaugeSelectors() {
     el.innerHTML = html;
     el.value = (cur && [...el.options].some((o) => o.value === cur)) ? cur : "__default__";
   }
-  populateColorList();
+  rebuildColorSelects();
 }
 
 // apply a dropdown choice to studioGauge; returns false if it navigated away (New)
@@ -384,7 +388,7 @@ function applySwatch(id) {
       if (f > 1.001 && be) { be.value = suggestGripValue(f); grip = suggestGripLabel(f); }
     }
   }
-  populateColorList();   // this swatch's colours are now offered per-field (you pick each role)
+  rebuildColorSelects();   // this swatch's colours are now offered per role
   return { stitches: applied, grip };
 }
 
@@ -409,23 +413,62 @@ function selectedSwatchColors() {
   selectedSwatchIds().forEach((id) => { if (sw[id]) swatchColors(sw[id]).forEach((c) => c && set.add(c)); });
   return [...set];
 }
-// per-field colour suggestions (<datalist>) drawn from the selected swatches
-function populateColorList() {
-  const dl = $("swColorList"); if (!dl) return;
-  dl.innerHTML = selectedSwatchColors().map((c) => `<option value="${esc(c)}"></option>`).join("");
+// build each role's colour <select> from the selected swatches' colours, keeping the
+// current (or `desired`) choice pickable, and mirror the choice into its colour picker
+function rebuildColorSelects(desired) {
+  const cols = selectedSwatchColors();
+  for (const id of Object.keys(COLOR_ROLE)) {
+    const el = $(id); if (!el) continue;
+    const want = desired && (id in desired) ? (desired[id] || "") : el.value;
+    const opts = new Set(cols);
+    if (want && want !== "__custom__") opts.add(want);   // keep a loaded/custom value
+    el.innerHTML = `<option value="">Default (unnamed)</option>` +
+      [...opts].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("") +
+      `<option value="__custom__">✏️ Custom name…</option>`;
+    el.value = (want && [...el.options].some((o) => o.value === want)) ? want : "";
+    syncRoleColor(id);
+  }
 }
 
-// Resolve a colour NAME to a hex the <input type="color"> picker can use, via the
-// browser's own CSS-colour parser (covers the ~148 standard names — crimson, ivory,
-// teal, coral, tan, khaki…). Returns "#rrggbb" for a recognised opaque colour, else
-// null (a fanciful yarn name like "Oatmeal" won't resolve, and we leave the picker).
+// Common descriptive / yarn colour names the browser's CSS parser doesn't know
+// (crimson, ivory, teal… it does; taupe, forest, oatmeal… it doesn't). Keys are
+// lower-cased and space-stripped; approximate hexes are fine for a preview swatch.
+const COLOR_NAMES = {
+  taupe: "#8b7e66", greige: "#bab5a8", mushroom: "#b6ac9a", oat: "#e0d3ba", oatmeal: "#d8cbb3",
+  cream: "#f7f0dd", ecru: "#cdbfa3", bone: "#e3dac9", eggshell: "#f0ead6", alabaster: "#eae6d9",
+  pearl: "#eae0c8", ivory: "#fffff0", vanilla: "#f3e5ab", butter: "#f5e9a0", wheat: "#f5deb3",
+  straw: "#e4d96f", flax: "#eedc82", sand: "#d8c19a", stone: "#c6bda9", clay: "#b66a50",
+  terracotta: "#c96f4a", brick: "#a44a3f", rust: "#b7410e", ginger: "#b06500", cinnamon: "#a5673f",
+  caramel: "#a97142", camel: "#c19a6b", honey: "#e6a817", amber: "#ffbf00", mustard: "#d4a017",
+  ochre: "#cc7722", saffron: "#f4c430", marigold: "#eaa221", pumpkin: "#e8811a", tangerine: "#f28500",
+  apricot: "#f7b26a", peach: "#ffcba4", blush: "#dda6a0", rose: "#c8747c", "dustyrose": "#c9a9a6",
+  mauve: "#b57e9f", lilac: "#c8a2c8", lavender: "#c5b3e6", periwinkle: "#a3a7d6", plum: "#7e4b6c",
+  grape: "#6f2da8", aubergine: "#5b3256", eggplant: "#5b3256", wine: "#722f37", burgundy: "#7b1e2b",
+  maroon: "#7d2b33", cherry: "#c62436", raspberry: "#c0224f", berry: "#8f2d56", scarlet: "#d3212d",
+  coral: "#f07a5a", salmon: "#e9836d", chocolate: "#6b4423", cocoa: "#7b4b34", coffee: "#6f4e37",
+  espresso: "#4a3728", mocha: "#8a6a52", latte: "#c8a97e", forest: "#1f5c3a", pine: "#28553d",
+  fern: "#4f7942", moss: "#8a9a5b", sage: "#9caf88", olive: "#7a7538", pistachio: "#a7c68a",
+  celadon: "#b7cbb2", seafoam: "#93e9be", mint: "#a7e8c0", jade: "#3aa680", emerald: "#3f9d6b",
+  teal: "#2b7f79", petrol: "#1f5f6b", turquoise: "#3fc1c9", aqua: "#4fd0d0", sky: "#8fc7e8",
+  denim: "#3a5f8a", cobalt: "#2a52be", navy: "#26324b", indigo: "#3b3b6d", steel: "#5b7285",
+  slate: "#5c6a72", storm: "#54606a", charcoal: "#3a3f43", graphite: "#4b4f52", ash: "#b2b0a8",
+  pewter: "#8e9294", dove: "#7b7a76", fog: "#cfd2cf", smoke: "#9a9c98", silver: "#c9cbc8",
+  platinum: "#e2e0da", cloud: "#e8e9e4", ink: "#25292e", jet: "#2b2b2b", onyx: "#353839",
+  chartreuse: "#c7d64b", lime: "#a3cd4a", lemon: "#f2e34c", canary: "#e8e04a", gold: "#d4af37",
+};
+
+// Resolve a colour NAME to a hex the <input type="color"> picker can use — first via
+// the browser's own CSS-colour parser (the ~148 standard names — crimson, ivory,
+// teal, coral…), then the descriptive table above. Returns "#rrggbb" or null.
 function nameToHex(name) {
   name = (name || "").trim();
   if (!name) return null;
   const ctx = (nameToHex._ctx ||= document.createElement("canvas").getContext("2d"));
   const parse = (v) => { ctx.fillStyle = "#000"; ctx.fillStyle = v; const a = ctx.fillStyle; ctx.fillStyle = "#fff"; ctx.fillStyle = v; return ctx.fillStyle === a ? a : null; };
-  const hit = parse(name) || parse(name.toLowerCase().replace(/\s+/g, ""));   // "sea green" → "seagreen"
-  return hit && /^#[0-9a-f]{6}$/i.test(hit) ? hit : null;
+  const key = name.toLowerCase().replace(/\s+/g, "");
+  const hit = parse(name) || parse(key);   // "sea green" → "seagreen"
+  if (hit && /^#[0-9a-f]{6}$/i.test(hit)) return hit;
+  return COLOR_NAMES[key] || null;
 }
 const COLOR_ROLE = { capName: "capCol", spotName: "spotCol", bodyName: "bodyCol" };
 // if a name field holds a recognised colour name, mirror it into that role's picker
@@ -1151,15 +1194,23 @@ function wire() {
       const label = opt ? opt.textContent : "";
       const proceed = setGaugeFromSel(stitch, val);   // false = navigated to New swatch
       if (!proceed) return;
-      populateColorList();   // the colour choices follow the selected swatches
+      rebuildColorSelects();   // the colour choices follow the selected swatches
       pendingStatus = val === "__default__" ? `${stitch}: standard gauge` : `${stitch} gauge: ${label}`;
       clearTimeout(debounceTimer);
       generate();
     });
   }
-  // typing/picking a recognised colour name mirrors it into that role's colour picker
+  // picking a colour (or "Custom name…") sets the role and mirrors it into the picker
   for (const nameId of Object.keys(COLOR_ROLE)) {
-    $(nameId).addEventListener("change", () => { if (syncRoleColor(nameId)) scheduleGenerate(); });
+    $(nameId).addEventListener("change", () => {
+      if ($(nameId).value === "__custom__") {
+        const v = (prompt("Colour name for this role:", "") || "").trim();
+        rebuildColorSelects({ [nameId]: v });   // add it as an option and select it
+      } else {
+        syncRoleColor(nameId);
+      }
+      scheduleGenerate();
+    });
   }
   $("swatches").addEventListener("click", (e) => {
     const use = e.target.closest("[data-usesw]");
