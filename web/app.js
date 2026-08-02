@@ -108,12 +108,14 @@ function apply(state) {
   }
   populateGaugeSelectors();
   // restore which swatch drives each stitch's gauge, so the pickers show it (not
-  // "Standard gauge") and studioGauge matches the picked swatch exactly
-  if (ui && ui.gaugeSel) {
-    for (const g of GAUGES) {
-      const sel = $(GAUGE_SEL[g]), want = ui.gaugeSel[g];
-      if (sel && want && [...sel.options].some((o) => o.value === want)) { sel.value = want; setGaugeFromSel(g, want); }
-    }
+  // "Standard gauge") and studioGauge matches the picked swatch exactly. Prefer the
+  // recorded choice (ui.gaugeSel); for older saved patterns without it, match the
+  // saved gauge numbers back to a swatch.
+  for (const g of GAUGES) {
+    const sel = $(GAUGE_SEL[g]); if (!sel) continue;
+    let want = ui && ui.gaugeSel && ui.gaugeSel[g];
+    if (!(want && [...sel.options].some((o) => o.value === want))) want = matchGaugeSel(g, input.gauges && input.gauges[g]);
+    if (want && [...sel.options].some((o) => o.value === want)) { sel.value = want; setGaugeFromSel(g, want); }
   }
   for (const b of BODY) if (input.body && input.body[b] != null) $(b).value = input.body[b];
 
@@ -307,6 +309,16 @@ function applicableMeas(stitch) {
     });
   }
   return out;
+}
+
+// find the swatch measurement whose gauge matches these saved numbers, as an
+// "id|idx" selector value — so a saved pattern (even one from before we recorded
+// the picker choice) restores the gauge selector to the swatch it was made with
+function matchGaugeSel(stitch, gauge) {
+  if (!gauge) return null;
+  const hit = applicableMeas(stitch).find(({ m }) =>
+    m.sts === gauge.sts && m.rows === gauge.rows && m.width === gauge.width && m.height === gauge.height);
+  return hit ? hit.id + "|" + hit.idx : null;
 }
 
 // (re)fill the three per-stitch gauge dropdowns from saved swatches; keeps selection
