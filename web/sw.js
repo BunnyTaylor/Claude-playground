@@ -9,7 +9,7 @@
  * (The previous version was cache-first, which meant a returning visitor kept
  * seeing the first files their browser ever cached — updates never showed.)
  */
-const CACHE = "mushroom-v4";
+const CACHE = "mushroom-v5";
 const ASSETS = [
   "./",
   "index.html",
@@ -17,6 +17,7 @@ const ASSETS = [
   "crochet-core.js",
   "crochet-viz.js",
   "registry.js",
+  "color-names.js",
   "app.js",
   "manifest.webmanifest",
   "icons/icon-192.png",

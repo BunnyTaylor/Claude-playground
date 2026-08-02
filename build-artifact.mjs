@@ -22,6 +22,7 @@ const css = read("style.css");
 const core = read("crochet-core.js");
 const viz = read("crochet-viz.js");
 const registry = read("registry.js");
+const colorNames = read("color-names.js");
 const app = read("app.js");
 
 const out =
@@ -29,6 +30,7 @@ const out =
   `<script>\n${core}\n</script>\n` +
   `<script>\n${viz}\n</script>\n` +
   `<script>\n${registry}\n</script>\n` +
+  `<script>\n${colorNames}\n</script>\n` +
   `<script>\n${app}\n</script>\n`;
 
 fs.mkdirSync(new URL("./dist/", import.meta.url), { recursive: true });
