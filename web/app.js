@@ -869,6 +869,21 @@ function render(data) {
       <div class="cb">${counterHTML(p)}<div class="counts">${esc(counts)}</div>${steps}</div>
     </div>`;
   }).join("");
+  // the global focus / reset bar only makes sense once some piece tracks rounds
+  const anyProgress = data.pieces.some((p) => p.progress);
+  const ctl = $("rowctl");
+  if (ctl) ctl.hidden = !anyProgress;
+  syncCounters();
+}
+
+// Reset every tracked piece back to round 0.
+function resetAllRounds() {
+  if (!LAST) return;
+  const all = progressAll();
+  const proj = curProj();
+  all[proj] = all[proj] || {};
+  LAST.pieces.forEach((p) => { if (p.progress) all[proj][p.id] = 0; });
+  localStorage.setItem(LS_PROGRESS, JSON.stringify(all));
   syncCounters();
 }
 
@@ -892,12 +907,18 @@ function renderYarn(yarn) {
 
 function counterHTML(p) {
   if (!p.progress) return "";
+  // Layout: [−]  Rnd n / total  [+] with the buttons pinned to the edges (so they
+  // never shift), then the progress bar, then a fixed-height hint line beneath —
+  // the hint (sts count + increase/decrease) lives below the buttons and reserves
+  // its own space, so showing/hiding it can't nudge the buttons or the instructions.
   return `<div class="counter" data-piece="${p.id}">
-    <button class="cbtn" data-d="-1" aria-label="previous round">−</button>
-    <div class="cmid"><div class="crnd"></div><div class="ccount"></div><div class="cbar"><i></i></div></div>
-    <button class="cbtn" data-d="1" aria-label="next round">＋</button>
-    <button class="cbtn cfocus" data-focus="1" aria-label="show only the current row" title="Collapse to the current row">focus</button>
-    <button class="cbtn creset" data-reset="1">reset</button>
+    <div class="crow">
+      <button class="cbtn" data-d="-1" aria-label="previous round">−</button>
+      <div class="crnd"></div>
+      <button class="cbtn" data-d="1" aria-label="next round">＋</button>
+    </div>
+    <div class="cbar"><i></i></div>
+    <div class="chint"></div>
   </div>`;
 }
 
@@ -905,12 +926,14 @@ const progressAll = () => { try { return JSON.parse(localStorage.getItem(LS_PROG
 const curProj = () => activeId || "working";
 
 /* ---------- focus mode (collapse to the current row) ---------- */
+// One global toggle per project (not per piece): when on, every card collapses to
+// just its current row's instruction.
 const LS_FOCUS = "mushroom.focus.v1";
 const focusAll = () => { try { return JSON.parse(localStorage.getItem(LS_FOCUS)) || {}; } catch { return {}; } };
-function getFocus(pid) { const a = focusAll(); return !!(a[curProj()] && a[curProj()][pid]); }
-function setFocus(pid, on) {
+function getFocus() { return !!focusAll()[curProj()]; }
+function setFocus(on) {
   const a = focusAll();
-  (a[curProj()] = a[curProj()] || {})[pid] = on;
+  a[curProj()] = !!on;
   localStorage.setItem(LS_FOCUS, JSON.stringify(a));
   syncCounters();
 }
@@ -974,29 +997,33 @@ function countAt(prog, r) {
 function pieceById(pid) { return LAST && LAST.pieces.find((p) => p.id === pid); }
 
 function syncCounters() {
+  const focus = getFocus();                                 // single global toggle
   document.querySelectorAll(".counter").forEach((el) => {
     const p = pieceById(el.dataset.piece);
     if (!p || !p.progress) return;
     const prog = p.progress, r = getRound(p.id);
-    const isInc = prog.incRounds.some((it) => it.rnd === r);
     const done = r >= prog.total;
-    el.classList.toggle("inc", isInc && r > 0);
-    el.querySelector(".crnd").innerHTML = done
-      ? `✓ done · ${prog.total} rnds`
-      : `Rnd ${r} / ${prog.total}${isInc && r > 0 ? ` · <span class="cinc">increase</span>` : ""}`;
-    el.querySelector(".ccount").textContent = `${countAt(prog, r)} sts`;
+    // direction from the actual stitch count vs. the previous round — so a round
+    // that drops stitches reads "decrease", not a mislabelled "increase".
+    const cur = countAt(prog, r), prev = countAt(prog, Math.max(0, r - 1));
+    const dir = r > 0 && cur > prev ? "increase" : r > 0 && cur < prev ? "decrease" : "";
+    el.classList.toggle("inc", dir === "increase");
+    el.classList.toggle("dec", dir === "decrease");
+    el.querySelector(".crnd").textContent = done ? `✓ done` : `Rnd ${r} / ${prog.total}`;
+    el.querySelector(".chint").innerHTML =
+      `${cur} sts${dir ? ` · <span class="cinc">${dir}</span>` : ""}`;
     el.querySelector(".cbar > i").style.width = `${Math.round(r / prog.total * 100)}%`;
     el.querySelector('[data-d="-1"]').disabled = r <= 0;
     el.querySelector('[data-d="1"]').disabled = done;
     // focus mode: collapse the card's steps to just the current row's instruction
     const card = el.closest(".card");
-    const focus = getFocus(p.id);
     card.classList.toggle("focus", focus);
-    const fbtn = el.querySelector(".cfocus");
-    if (fbtn) fbtn.classList.toggle("on", focus);
     const active = focus ? new Set(focusSteps(p, r)) : null;
     card.querySelectorAll(".step").forEach((s) => s.classList.toggle("active", !!active && active.has(+s.dataset.si)));
   });
+  // reflect global focus state on its button
+  const fbtn = $("focusToggle");
+  if (fbtn) { fbtn.classList.toggle("on", focus); fbtn.setAttribute("aria-pressed", focus ? "true" : "false"); }
 }
 
 function fmtCount(v) {
@@ -1031,9 +1058,21 @@ function saveCurrent() {
   state.gen = curGen.id;
   if (!state.ui.name.trim()) state.ui.name = "Untitled";
   const projects = loadProjects();
+  const wasWorking = !activeId;
   const id = activeId || ("p" + Date.now().toString(36));
   projects[id] = { savedAt: Date.now(), state };
   saveProjects(projects);
+  // Carry the unsaved "working" row counts + focus state over to the new project id,
+  // so first-time Save doesn't lose the rounds already tracked.
+  if (wasWorking) {
+    for (const [LS, migrate] of [[LS_PROGRESS, progressAll], [LS_FOCUS, focusAll]]) {
+      const all = migrate();
+      if (all.working !== undefined && all[id] === undefined) {
+        all[id] = all.working;
+        localStorage.setItem(LS, JSON.stringify(all));
+      }
+    }
+  }
   activeId = id;
   renderProjects();
   $("status").textContent = `saved “${state.ui.name}”`;
@@ -1256,10 +1295,12 @@ function wire() {
     const wrap = btn.closest(".counter");
     const p = pieceById(wrap.dataset.piece);
     if (!p || !p.progress) return;
-    if (btn.dataset.focus !== undefined) setFocus(p.id, !getFocus(p.id));
-    else if (btn.dataset.reset !== undefined) setRound(p.id, 0, p.progress.total);
-    else setRound(p.id, getRound(p.id) + parseInt(btn.dataset.d, 10), p.progress.total);
+    setRound(p.id, getRound(p.id) + parseInt(btn.dataset.d, 10), p.progress.total);
   });
+
+  // global row controls: one focus toggle + one reset for the whole pattern
+  $("focusToggle").addEventListener("click", () => setFocus(!getFocus()));
+  $("resetRounds").addEventListener("click", resetAllRounds);
 
   // PWA install: show the button only when the browser offers installation
   let deferredPrompt = null;

@@ -177,25 +177,30 @@ table.uk th{text-align:left;font-size:10px;text-transform:uppercase;letter-spaci
 table.uk td{padding:6px 8px 6px 0;border-bottom:1px solid var(--line);font-weight:500;}
 table.uk td:first-child{font-weight:700;color:var(--green-deep);}
 
+/* global row controls (single focus + reset for the whole pattern) */
+.rowctl{display:flex;gap:9px;margin-bottom:13px;}
+#focusToggle.on{background:linear-gradient(180deg,var(--green-lite),var(--green));color:#fff;border-color:var(--green);}
+
 /* row counter */
-.counter{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
-  border-radius:14px;padding:8px 9px;margin-bottom:11px;box-shadow:var(--sh-sm);}
+.counter{background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:8px 10px 9px;margin-bottom:11px;box-shadow:var(--sh-sm);}
 .counter.inc{border-color:var(--green);box-shadow:0 0 0 3px var(--focus),var(--sh-sm);}
+.counter.dec{border-color:var(--amber);box-shadow:0 0 0 3px rgba(214,158,46,.18),var(--sh-sm);}
+/* buttons pinned to the edges so they never move; round label centred between them */
+.crow{display:flex;align-items:center;justify-content:space-between;gap:9px;}
 .cbtn{width:44px;height:44px;flex:0 0 auto;border:none;border-radius:12px;
   background:linear-gradient(180deg,var(--green-lite),var(--green));
   color:#fff;font-size:23px;font-weight:800;cursor:pointer;line-height:1;
   box-shadow:var(--sh-btn),0 1px 0 rgba(255,255,255,.3) inset;transition:transform .1s;}
 .cbtn:active{transform:translateY(1px);}
 .cbtn:disabled{opacity:.4;cursor:default;box-shadow:none;}
-.cbtn.creset{width:auto;padding:0 12px;height:36px;font-size:12px;background:var(--surface);
-  color:var(--ink-soft);border:1.5px solid var(--line);box-shadow:var(--sh-sm);}
-.cbtn.creset:hover{background:var(--sage);color:var(--green-deep);}
-.cmid{flex:1;text-align:center;}
-.cmid .crnd{font-weight:800;font-size:15px;color:var(--green-deep);}
-.cmid .ccount{font-size:12px;color:var(--ink-soft);font-weight:600;}
-.cmid .cinc{color:var(--amber);font-weight:800;}
-.cbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:5px;box-shadow:inset 0 1px 2px rgba(36,31,23,.1);}
+.crnd{flex:1;text-align:center;font-weight:800;font-size:15px;color:var(--green-deep);}
+.cbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:8px;box-shadow:inset 0 1px 2px rgba(36,31,23,.1);}
 .cbar > i{display:block;height:100%;background:linear-gradient(90deg,var(--green-lite),var(--green));border-radius:3px;transition:width .15s;}
+/* fixed-height hint line under the bar — reserving the space keeps the buttons and
+   the instructions below from shifting when the increase/decrease note appears */
+.chint{min-height:18px;margin-top:6px;text-align:center;font-size:12px;color:var(--ink-soft);font-weight:600;}
+.chint .cinc{color:var(--amber);font-weight:800;text-transform:uppercase;letter-spacing:.4px;}
 
 /* yarn panel */
 .yarn{background:var(--surface);border:1px solid rgba(255,255,255,.7);border-radius:var(--r);padding:15px 17px;margin-bottom:16px;box-shadow:var(--sh-md);}
@@ -222,7 +227,7 @@ table.uk td:first-child{font-weight:700;color:var(--green-deep);}
   .wrap { max-width:none; padding:0 4mm; }
   .grid { display:block; }
   header.cap p, .col-in, .toolbar .btnrow, #installBtn, .refbox, .foot,
-  .counter, #status, .gnote { display:none !important; }
+  .counter, .rowctl, #status, .gnote { display:none !important; }
   .panel,.card,.viz,.yarn,.warn{box-shadow:none;}
   .viz { border:none; background:#fff; padding:0; break-inside:avoid; }
   .viz svg { max-height:150mm; }
