@@ -17,6 +17,25 @@ var CrochetViz = (function (Core) {
   };
   var CAPTION_INK = "#7a6a52";   // neutral label/caption colour (theme, not garment)
 
+  // darken a "#rrggbb" by `amt` (0..1) — used to derive outline/rib shades from the
+  // ACTUAL chosen colours, so nothing paints a stale default (e.g. the old red).
+  function darken(hex, amt) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    if (!m) return hex;
+    var n = parseInt(m[1], 16), f = 1 - amt;
+    var r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+  // merge the given palette over the defaults and derive the deeper shades from the
+  // chosen cap/body/spot so every stroke, rib and band tracks the selected colours.
+  function mkPal(palette) {
+    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    pal.capDeep = darken(pal.cap, 0.38);
+    pal.bodyDeep = darken(pal.body, 0.16);
+    pal.spotDeep = darken(pal.spot, 0.18);
+    return pal;
+  }
+
   function e(v) { return (Math.round(v * 100) / 100).toString(); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
@@ -49,7 +68,7 @@ var CrochetViz = (function (Core) {
     opts = opts || {};
     var schematic = !!opts.schematic;
     var width = opts.width || 520, height = opts.height || 820;
-    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var pal = mkPal(palette);
     var meta = result.meta, u = meta.unit;
     var body = Object.assign({}, inp.body || {});
     var style = Object.assign({}, inp.style || {});
@@ -117,11 +136,11 @@ var CrochetViz = (function (Core) {
     }
     parts.push('<path d="' + frill.join(" ") + '" fill="none" stroke="' + pal.body + '" stroke-width="7" stroke-linecap="round" opacity="0.9"/>');
 
-    // waistband
-    parts.push('<rect x="' + e(cx - waistHalf) + '" y="' + e(yWaist - 12) + '" width="' + e(2 * waistHalf) + '" height="18" rx="3" fill="' + pal.capDeep + '"/>');
+    // waistband — worked in the BODY colour (a touch deeper than the skirt), ribbed
+    parts.push('<rect x="' + e(cx - waistHalf) + '" y="' + e(yWaist - 12) + '" width="' + e(2 * waistHalf) + '" height="18" rx="3" fill="' + pal.bodyDeep + '"/>');
     for (var k = 0; k < Math.floor(2 * waistHalf / 6); k++) {
       var rx = cx - waistHalf + 3 + k * 6;
-      parts.push('<line x1="' + e(rx) + '" y1="' + e(yWaist - 11) + '" x2="' + e(rx) + '" y2="' + e(yWaist + 5) + '" stroke="' + pal.cap + '" stroke-width="1" opacity="0.4"/>');
+      parts.push('<line x1="' + e(rx) + '" y1="' + e(yWaist - 11) + '" x2="' + e(rx) + '" y2="' + e(yWaist + 5) + '" stroke="' + pal.body + '" stroke-width="1" opacity="0.5"/>');
     }
 
     // flounce
@@ -290,7 +309,7 @@ var CrochetViz = (function (Core) {
   function renderHatSvg(result, inp, palette, opts) {
     opts = opts || {};
     var width = opts.width || 460, height = opts.height || 380;
-    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var pal = mkPal(palette);
     var meta = result.meta, u = meta.unit;
     var headDia = meta.headCirc / Math.PI, brimDia = meta.brimCirc / Math.PI;
     var cx = width / 2;
@@ -321,7 +340,7 @@ var CrochetViz = (function (Core) {
   function renderBagSvg(result, inp, palette, opts) {
     opts = opts || {};
     var width = opts.width || 400, height = opts.height || 420;
-    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var pal = mkPal(palette);
     var meta = result.meta, u = meta.unit;
     var dia = meta.baseCirc / Math.PI, ht = meta.height;
     var cx = width / 2;
@@ -370,7 +389,7 @@ var CrochetViz = (function (Core) {
   function renderTightsSvg(result, inp, palette, opts) {
     opts = opts || {};
     var width = opts.width || 360, height = opts.height || 580;
-    var pal = Object.assign({}, DEFAULT_PALETTE, palette || {});
+    var pal = mkPal(palette);
     var meta = result.meta, u = meta.unit;
     var cx = width / 2;
     var hipHalf = width * 0.30;
@@ -408,11 +427,11 @@ var CrochetViz = (function (Core) {
       }
     });
     parts.push('<g clip-path="url(#tightsBody)">' + veins.join("") + '</g>');
-    // waistband on top
-    parts.push('<rect x="' + e(cx - waistHalf) + '" y="' + e(yTop) + '" width="' + e(2 * waistHalf) + '" height="' + bandH + '" rx="4" fill="' + pal.capDeep + '"/>');
+    // waistband on top — body-colour rib
+    parts.push('<rect x="' + e(cx - waistHalf) + '" y="' + e(yTop) + '" width="' + e(2 * waistHalf) + '" height="' + bandH + '" rx="4" fill="' + pal.bodyDeep + '"/>');
     for (var k = 0; k < Math.floor(2 * waistHalf / 6); k++) {
       var rx = cx - waistHalf + 3 + k * 6;
-      parts.push('<line x1="' + e(rx) + '" y1="' + e(yTop + 2) + '" x2="' + e(rx) + '" y2="' + e(yTop + bandH - 2) + '" stroke="' + pal.cap + '" stroke-width="1" opacity="0.35"/>');
+      parts.push('<line x1="' + e(rx) + '" y1="' + e(yTop + 2) + '" x2="' + e(rx) + '" y2="' + e(yTop + bandH - 2) + '" stroke="' + pal.body + '" stroke-width="1" opacity="0.4"/>');
     }
     // ankle cuffs
     [lLegCx, rLegCx].forEach(function (lc) {
