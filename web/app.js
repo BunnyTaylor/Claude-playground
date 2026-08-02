@@ -80,9 +80,11 @@ function gather() {
       names: { capName: $("capName").value, spotName: $("spotName").value, bodyName: $("bodyName").value },
       dotSizes: $("dotSizes").value, dotGap: $("dotGap").value,
       waistEase: $("waistEase").value, fullness: $("fullness").value,
-      bandEase: $("bandEase").value,
+      bandEase: $("bandEase").value, ribStyle: $("ribStyle").value,
       flare: $("flare").value, balloon: $("balloon").value,
       capCol: $("capCol").value, spotCol: $("spotCol").value, bodyCol: $("bodyCol").value,
+      // which saved swatch drives each stitch's gauge, so the pickers restore too
+      gaugeSel: Object.fromEntries(GAUGES.map((g) => [g, ($(GAUGE_SEL[g]) || {}).value])),
     },
   };
 }
@@ -105,22 +107,33 @@ function apply(state) {
     studioGauge[g] = { sts: src.sts, rows: src.rows, width: src.width, height: src.height };
   }
   populateGaugeSelectors();
-  for (const b of BODY) $(b).value = input.body[b];
+  // restore which swatch drives each stitch's gauge, so the pickers show it (not
+  // "Standard gauge") and studioGauge matches the picked swatch exactly
+  if (ui && ui.gaugeSel) {
+    for (const g of GAUGES) {
+      const sel = $(GAUGE_SEL[g]), want = ui.gaugeSel[g];
+      if (sel && want && [...sel.options].some((o) => o.value === want)) { sel.value = want; setGaugeFromSel(g, want); }
+    }
+  }
+  for (const b of BODY) if (input.body && input.body[b] != null) $(b).value = input.body[b];
 
   $("pName").value = (ui && ui.name) || "";
   $("capName").value = input.colors.cap === "cap colour" ? "" : input.colors.cap;
   $("spotName").value = input.colors.spot === "spot colour" ? "" : input.colors.spot;
   $("bodyName").value = input.colors.body === "body colour" ? "" : input.colors.body;
 
+  // prefer the exact strings the user picked (ui.*) so option values match precisely
+  // (e.g. "2.0" doesn't round-trip through the number 2); fall back to the style value
   const S = input.style;
-  $("dotSizes").value = (S.dotSizes && S.dotSizes.length ? S.dotSizes : [S.dotDia]).join(", ");
-  setSelect("dotGap", S.dotGap);
-  setSelect("waistEase", S.waistEase);
-  setSelect("fullness", S.fullness);
-  setSelect("flare", S.flare);
-  setSelect("balloon", S.balloon);
-  setSelect("ribStyle", S.ribStyle || "sideways");
-  setSelect("bandEase", (ui && ui.bandEase) || (S.bandEase != null ? String(S.bandEase) : "auto"));
+  const pick = (k, sval) => (ui && ui[k] != null && ui[k] !== "") ? ui[k] : sval;
+  $("dotSizes").value = pick("dotSizes", (S.dotSizes && S.dotSizes.length ? S.dotSizes : [S.dotDia]).join(", "));
+  setSelect("dotGap", pick("dotGap", S.dotGap));
+  setSelect("waistEase", pick("waistEase", S.waistEase));
+  setSelect("fullness", pick("fullness", S.fullness));
+  setSelect("flare", pick("flare", S.flare));
+  setSelect("balloon", pick("balloon", S.balloon));
+  setSelect("ribStyle", pick("ribStyle", S.ribStyle || "sideways"));
+  setSelect("bandEase", pick("bandEase", S.bandEase != null ? String(S.bandEase) : "auto"));
   if (ui) {
     $("capCol").value = ui.capCol || "#B83A2B";
     $("spotCol").value = ui.spotCol || "#FCF8EF";
