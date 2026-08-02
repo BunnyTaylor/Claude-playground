@@ -432,8 +432,8 @@ function rebuildColorSelects(desired) {
 
 // Resolve a colour NAME to a hex the <input type="color"> picker can use — first via
 // the browser's own CSS-colour parser (the ~148 standard names — crimson, ivory,
-// teal, coral…), then the bundled name table (COLOR_NAMES, from color-names.js:
-// ~32k names — the meodai list + xkcd + yarn words). Returns "#rrggbb" or null.
+// teal, coral…), then the bundled name table (COLOR_NAMES from color-names.js: the
+// ~30k meodai color-name-list). Returns "#rrggbb" or null.
 function nameToHex(name) {
   name = (name || "").trim();
   if (!name) return null;
