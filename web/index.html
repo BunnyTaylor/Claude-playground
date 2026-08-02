@@ -99,19 +99,25 @@
           </div>
         </div>
 
+        <div class="group-label">Gauge <span class="hint" style="font-weight:400">pick a saved swatch for each stitch</span></div>
+        <div class="field"><label>Rib <span class="hint">waistband &amp; cuffs</span></label><select id="gaugeSelRib"></select></div>
+        <div class="field"><label>Hdc <span class="hint">skirt / bag body</span></label><select id="gaugeSelHdc"></select></div>
+        <div class="field"><label>Sc <span class="hint">flounce / sleeves / hat</span></label><select id="gaugeSelSc"></select></div>
+        <div id="gaugeDerived" class="gnote"></div>
+
         <div class="group-label">Colours &amp; spots</div>
-        <div class="field" style="margin-bottom:10px"><select id="colorFill"></select></div>
+        <p class="gnote" style="margin:-2px 0 9px">Pick a colour for each role from your selected swatches (or type your own).</p>
         <div class="crow">
           <input type="color" id="capCol" value="#B83A2B">
-          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" list="swColorList" placeholder="e.g. Crimson"></div>
+          <div><div class="clab">Cap — flounce, sleeves</div><input type="text" id="capName" list="swColorList" placeholder="pick or type a colour…"></div>
         </div>
         <div class="crow">
           <input type="color" id="spotCol" value="#FCF8EF">
-          <div><div class="clab">Spots</div><input type="text" id="spotName" list="swColorList" placeholder="e.g. Ivory"></div>
+          <div><div class="clab">Spots</div><input type="text" id="spotName" list="swColorList" placeholder="pick or type a colour…"></div>
         </div>
         <div class="crow">
           <input type="color" id="bodyCol" value="#F2E4C9">
-          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" list="swColorList" placeholder="e.g. Oat"></div>
+          <div><div class="clab">Body — skirt, frills</div><input type="text" id="bodyName" list="swColorList" placeholder="pick or type a colour…"></div>
         </div>
         <datalist id="swColorList"></datalist>
         <div class="two">
@@ -128,12 +134,6 @@
             </select>
           </div>
         </div>
-
-        <div class="group-label">Gauge <span class="hint" style="font-weight:400">pick a saved swatch for each stitch</span></div>
-        <div class="field"><label>Rib <span class="hint">waistband &amp; cuffs</span></label><select id="gaugeSelRib"></select></div>
-        <div class="field"><label>Hdc <span class="hint">skirt / bag body</span></label><select id="gaugeSelHdc"></select></div>
-        <div class="field"><label>Sc <span class="hint">flounce / sleeves / hat</span></label><select id="gaugeSelSc"></select></div>
-        <div id="gaugeDerived" class="gnote"></div>
 
         <!-- HAT inputs -->
         <div id="hatInputs" hidden>
