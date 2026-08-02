@@ -151,6 +151,17 @@ input[type=color]{width:44px;height:42px;padding:3px;border:1.5px solid var(--li
 .step:first-child{border-top:none;}
 .step .lb{flex:0 0 92px;font-weight:800;color:var(--green-deep);font-size:12px;}
 .step .tx{flex:1;line-height:1.45;}
+/* focus mode — collapse a card's steps to just the current row's instruction */
+.card.focus .step{display:none;}
+.card.focus .step.active{display:flex;}
+.card.focus .step.active:first-of-type{border-top:none;}
+.card.focus .counts{display:none;}
+.card.focus .cb::after{content:"Focus on — showing the current row only";display:block;font-size:11px;
+  color:var(--ink-soft);font-weight:600;padding-top:9px;margin-top:4px;border-top:1px dashed var(--line);}
+.cbtn.cfocus{width:auto;padding:0 12px;height:36px;font-size:12px;background:var(--surface);
+  color:var(--ink-soft);border:1.5px solid var(--line);box-shadow:var(--sh-sm);}
+.cbtn.cfocus:hover{background:var(--sage);color:var(--green-deep);}
+.cbtn.cfocus.on{background:linear-gradient(180deg,var(--green-lite),var(--green));color:#fff;border-color:var(--green);}
 
 .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;padding:8px 0;}
 .chk input{width:18px;height:18px;accent-color:var(--green);cursor:pointer;}

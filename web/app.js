@@ -805,8 +805,8 @@ function render(data) {
     const counts = Object.entries(p.counts)
       .filter(([k]) => k !== "sizes")
       .map(([k, v]) => `${k}: ${fmtCount(v)}`).join(" · ");
-    const steps = p.steps.map(([lb, tx]) =>
-      `<div class="step"><div class="lb">${esc(lb)}</div><div class="tx">${esc(tx)}</div></div>`).join("");
+    const steps = p.steps.map(([lb, tx], i) =>
+      `<div class="step" data-si="${i}"><div class="lb">${esc(lb)}</div><div class="tx">${esc(tx)}</div></div>`).join("");
     const make = (p.makeCount || 1) > 1 ? ` ×${p.makeCount}` : "";
     return `<div class="card${wide ? " wide" : ""}">
       <div class="ch"><h3>${esc(p.title)}${make}</h3><div class="st">${esc(p.stitch)}</div></div>
@@ -840,12 +840,64 @@ function counterHTML(p) {
     <button class="cbtn" data-d="-1" aria-label="previous round">−</button>
     <div class="cmid"><div class="crnd"></div><div class="ccount"></div><div class="cbar"><i></i></div></div>
     <button class="cbtn" data-d="1" aria-label="next round">＋</button>
+    <button class="cbtn cfocus" data-focus="1" aria-label="show only the current row" title="Collapse to the current row">focus</button>
     <button class="cbtn creset" data-reset="1">reset</button>
   </div>`;
 }
 
 const progressAll = () => { try { return JSON.parse(localStorage.getItem(LS_PROGRESS)) || {}; } catch { return {}; } };
 const curProj = () => activeId || "working";
+
+/* ---------- focus mode (collapse to the current row) ---------- */
+const LS_FOCUS = "mushroom.focus.v1";
+const focusAll = () => { try { return JSON.parse(localStorage.getItem(LS_FOCUS)) || {}; } catch { return {}; } };
+function getFocus(pid) { const a = focusAll(); return !!(a[curProj()] && a[curProj()][pid]); }
+function setFocus(pid, on) {
+  const a = focusAll();
+  (a[curProj()] = a[curProj()] || {})[pid] = on;
+  localStorage.setItem(LS_FOCUS, JSON.stringify(a));
+  syncCounters();
+}
+
+// Which step index(es) apply at round r — so focus mode can show just those.
+// Increase rounds are labelled "Rnd N"/"(Rnd N)"; plain and repeat rounds fall to the
+// nearest "repeat" step (e.g. Plain rnds, the band rows, the frill ruffle); the band
+// setup shows while r is within the band, and finishing steps show once done.
+function focusSteps(p, r) {
+  const steps = p.steps, n = steps.length;
+  if (!p.progress) return steps.map((_, i) => i);
+  const total = p.progress.total;
+  const anchorOf = (lb) => { const m = /^Rnd (\d+)\b/.exec(lb) || /\(Rnd (\d+)\)/.exec(lb); return m ? +m[1] : null; };
+  const anchors = steps.map((s) => anchorOf(s[0]));
+  let firstAnchor = anchors.findIndex((a) => a !== null);
+  if (firstAnchor < 0) firstAnchor = n;
+  const setUpRnd = firstAnchor < n ? anchors[firstAnchor] : 1;
+  const bandRnds = Math.max(0, setUpRnd - 1);
+  const isRepeat = (i) => anchors[i] === null && /rep to rnd|not listed|each st around|work plain|each ch around|every row/i.test(steps[i][1]);
+  let lastAnchor = -1;
+  for (let i = 0; i < n; i++) if (anchors[i] !== null) lastAnchor = i;
+  if (r >= total && total > 0) {                          // done → the finishing steps
+    const tail = [];
+    for (let i = lastAnchor + 1; i < n; i++) if (!isRepeat(i)) tail.push(i);
+    return tail.length ? tail : (n ? [n - 1] : []);
+  }
+  if (r <= bandRnds) {                                    // not started / working the band
+    const band = []; for (let i = 0; i < firstAnchor; i++) band.push(i);
+    return band.length ? band : (firstAnchor < n ? [firstAnchor] : [0]);
+  }
+  const exact = anchors.indexOf(r);                       // an explicitly listed round
+  if (exact >= 0) return [exact];
+  let chosen = null;                                      // else the repeat step in effect
+  for (let i = firstAnchor; i < n; i++) if (isRepeat(i)) {
+    let from = setUpRnd;
+    for (let j = i - 1; j >= 0; j--) if (anchors[j] !== null) { from = anchors[j]; break; }
+    if (from + 1 <= r && (!chosen || from > chosen.from)) chosen = { i, from };
+  }
+  if (chosen) return [chosen.i];
+  let best = firstAnchor < n ? firstAnchor : 0;           // fallback: last listed round ≤ r
+  for (let i = 0; i < n; i++) if (anchors[i] !== null && anchors[i] <= r) best = i;
+  return [best];
+}
 
 function getRound(pid) {
   const all = progressAll();
@@ -880,6 +932,14 @@ function syncCounters() {
     el.querySelector(".cbar > i").style.width = `${Math.round(r / prog.total * 100)}%`;
     el.querySelector('[data-d="-1"]').disabled = r <= 0;
     el.querySelector('[data-d="1"]').disabled = done;
+    // focus mode: collapse the card's steps to just the current row's instruction
+    const card = el.closest(".card");
+    const focus = getFocus(p.id);
+    card.classList.toggle("focus", focus);
+    const fbtn = el.querySelector(".cfocus");
+    if (fbtn) fbtn.classList.toggle("on", focus);
+    const active = focus ? new Set(focusSteps(p, r)) : null;
+    card.querySelectorAll(".step").forEach((s) => s.classList.toggle("active", !!active && active.has(+s.dataset.si)));
   });
 }
 
@@ -1137,7 +1197,8 @@ function wire() {
     const wrap = btn.closest(".counter");
     const p = pieceById(wrap.dataset.piece);
     if (!p || !p.progress) return;
-    if (btn.dataset.reset !== undefined) setRound(p.id, 0, p.progress.total);
+    if (btn.dataset.focus !== undefined) setFocus(p.id, !getFocus(p.id));
+    else if (btn.dataset.reset !== undefined) setRound(p.id, 0, p.progress.total);
     else setRound(p.id, getRound(p.id) + parseInt(btn.dataset.d, 10), p.progress.total);
   });
 
