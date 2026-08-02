@@ -415,10 +415,31 @@ function populateColorFill() {
   el.disabled = rows.length === 0;
 }
 
-// apply up to three colour names to the cap / spots / body roles (positional)
+// Resolve a colour NAME to a hex the <input type="color"> picker can use, via the
+// browser's own CSS-colour parser (covers the ~148 standard names — crimson, ivory,
+// teal, coral, tan, khaki…). Returns "#rrggbb" for a recognised opaque colour, else
+// null (a fanciful yarn name like "Oatmeal" won't resolve, and we leave the picker).
+function nameToHex(name) {
+  name = (name || "").trim();
+  if (!name) return null;
+  const ctx = (nameToHex._ctx ||= document.createElement("canvas").getContext("2d"));
+  const parse = (v) => { ctx.fillStyle = "#000"; ctx.fillStyle = v; const a = ctx.fillStyle; ctx.fillStyle = "#fff"; ctx.fillStyle = v; return ctx.fillStyle === a ? a : null; };
+  const hit = parse(name) || parse(name.toLowerCase().replace(/\s+/g, ""));   // "sea green" → "seagreen"
+  return hit && /^#[0-9a-f]{6}$/i.test(hit) ? hit : null;
+}
+const COLOR_ROLE = { capName: "capCol", spotName: "spotCol", bodyName: "bodyCol" };
+// if a name field holds a recognised colour name, mirror it into that role's picker
+function syncRoleColor(nameId) {
+  const hex = nameToHex($(nameId).value);
+  if (hex) $(COLOR_ROLE[nameId]).value = hex;
+  return !!hex;
+}
+
+// apply up to three colour names to the cap / spots / body roles (positional),
+// and reflect any recognised name in the matching colour picker
 function fillColorRoles(cols) {
   const roles = ["capName", "spotName", "bodyName"];
-  roles.forEach((r, i) => { if (cols[i]) $(r).value = cols[i]; });
+  roles.forEach((r, i) => { if (cols[i]) { $(r).value = cols[i]; syncRoleColor(r); } });
 }
 
 // kept as the name every call site uses; now refreshes the per-stitch gauge pickers
@@ -1141,6 +1162,10 @@ function wire() {
       clearTimeout(debounceTimer);
       generate();
     });
+  }
+  // typing a recognised colour name mirrors it into that role's colour picker
+  for (const nameId of Object.keys(COLOR_ROLE)) {
+    $(nameId).addEventListener("change", () => { if (syncRoleColor(nameId)) scheduleGenerate(); });
   }
   // "Fill colours from a swatch" → set cap/spot/body names from that profile
   $("colorFill").addEventListener("change", (e) => {
