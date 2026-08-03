@@ -254,13 +254,30 @@ function collectionDefaults(coll) {
 let seededColl = null;
 function seedForCollection(coll) {
   const w = loadAllWorking()[coll.id];
-  apply(w && w.input ? { input: w.input, ui: w.ui, coll: coll.id, gen: w.gen } : collectionDefaults(coll));
+  if (!(w && w.input)) { apply(collectionDefaults(coll)); seededColl = coll.id; return; }
+  // Restore this collection's last session, but any colour role the user never
+  // deliberately named should follow THIS collection's palette — so a stale hex left
+  // over from another set's defaults (e.g. a mushroom-tan "main" on the bat set) is
+  // replaced by the collection's own default colour.
+  const def = collectionDefaults(coll);
+  const st = { input: { ...w.input, colors: { ...w.input.colors } }, ui: { ...(w.ui || {}) }, coll: coll.id, gen: w.gen };
+  const generic = { cap: "cap colour", spot: "spot colour", body: "body colour" };
+  const uiCol = { cap: "capCol", spot: "spotCol", body: "bodyCol" };
+  for (const role of ["cap", "spot", "body"]) {
+    const nm = st.input.colors[role];
+    if (!nm || nm === generic[role]) {
+      st.input.colors[role] = def.input.colors[role];
+      st.ui[uiCol[role]] = def.ui[uiCol[role]];
+    }
+  }
+  apply(st);
   seededColl = coll.id;
 }
 
 /* ---------- home / studio routing ---------- */
 
 function showHome() {
+  delete document.body.dataset.studioTheme;   // the home gallery is neutral
   $("studioView").hidden = true;
   $("swatchView").hidden = true;
   $("homeView").hidden = false;
@@ -271,6 +288,7 @@ function showHome() {
 function openStudio(collId, genId, setHash = true) {
   const f = Registry.find(collId, genId) || Registry.find(curColl.id, curColl.generators[0].id);
   curColl = f.collection;
+  document.body.dataset.studioTheme = curColl.id;   // re-skin the whole studio for this set
   buildTypeSwitch(curColl);
   applyRoleConfig(curColl);   // tailor the colour roles to this collection
   setGenerator(f.generator);
@@ -881,6 +899,7 @@ function gatherSwatchRecord() {
 }
 
 function openSwatch(id, setHash = true) {
+  delete document.body.dataset.studioTheme;   // the swatch tool is neutral (shared library)
   $("homeView").hidden = true; $("studioView").hidden = true; $("swatchView").hidden = false;
   swEditId = id || null;
   const rec = id ? loadSwatches()[id] : null;
