@@ -215,6 +215,11 @@ var CrochetCore = (function () {
   };
   var defaultInput = function () { return JSON.parse(JSON.stringify(DEFAULT_INPUT)); };
 
+  // The mushroom set's polka spots: a decorative overlay that uses ~15% as much yarn
+  // as its cap-coloured areas, counted in the spot colour. Passed through meta.overlay
+  // so the yarn estimate stays colour-agnostic (see estimateYarn).
+  var SPOT_OVERLAY = { from: "cap", to: "spot", frac: 0.15, id: "spots", title: "Polka spots" };
+
   function computePattern(input) {
     if (!input) input = DEFAULT_INPUT;
     var u = input.unit || "cm";
@@ -540,7 +545,8 @@ var CrochetCore = (function () {
       pieces: pieces, warnings: warnings,
       meta: {
         unit: u, kind: "dress", density: { rib: rib, hdc: hdc, sc: sc },
-        waistbandCirc: wbCirc, hemCirc: hemCirc, skirtTopSts: skStart, colors: C
+        waistbandCirc: wbCirc, hemCirc: hemCirc, skirtTopSts: skStart, colors: C,
+        overlay: SPOT_OVERLAY
       }
     };
   }
@@ -646,7 +652,7 @@ var CrochetCore = (function () {
     if (headSts < 40) warnings.push("Head circumference looks small — double-check the measurement and your hdc gauge.");
     return {
       pieces: pieces, warnings: warnings,
-      meta: { unit: u, kind: "hat", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, headCirc: headCirc, brimCirc: headCirc + 2 * Math.PI * brimWidth },
+      meta: { unit: u, kind: "hat", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, headCirc: headCirc, brimCirc: headCirc + 2 * Math.PI * brimWidth, overlay: SPOT_OVERLAY },
     };
   }
 
@@ -725,7 +731,7 @@ var CrochetCore = (function () {
     if (baseSts < 24) warnings.push("Base diameter looks small — check the diameter and your hdc gauge.");
     return {
       pieces: pieces, warnings: warnings,
-      meta: { unit: u, kind: "bag", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, baseCirc: Math.PI * diameter, height: height },
+      meta: { unit: u, kind: "bag", density: { rib: rib, hdc: hdc, sc: sc }, colors: C, baseCirc: Math.PI * diameter, height: height, overlay: SPOT_OVERLAY },
     };
   }
 
@@ -906,6 +912,7 @@ var CrochetCore = (function () {
       meta: {
         unit: u, kind: "tights", density: { rib: rib, hdc: hdc, sc: sc }, colors: C,
         waistCirc: waist, hipCirc: hip, thighCirc: thigh, ankleCirc: ankle, inseam: inseam, rise: rise,
+        overlay: SPOT_OVERLAY,
       },
     };
   }
@@ -1080,8 +1087,13 @@ var CrochetCore = (function () {
       }
       return s;
     }
-    var colorCm = { cap: 0, body: 0, spot: 0 };
-    var spottedCm = 0;    // yarn in cap-coloured (spotted) areas
+    // Tally yarn per colour ROLE generically — every role is handled the same way,
+    // so a set can define any roles (cap/spot/body, main/accent, …) with nothing
+    // special-cased. Seed the buckets from the pattern's declared colours.
+    var colorCm = {};
+    Object.keys(colors).forEach(function (k) { colorCm[k] = 0; });
+    var addCm = function (k, cm) { colorCm[k] = (colorCm[k] || 0) + cm; };
+    var round1 = function (cm) { return Math.round(cm / 100 * 10) / 10; };
     var piecesOut = [];
     result.pieces.forEach(function (p) {
       // Prefer per-piece yarn metadata (hat/bag); fall back to the dress spec.
@@ -1093,39 +1105,41 @@ var CrochetCore = (function () {
         g = spec[p.id][0]; ck = spec[p.id][2];
         sts = p.id === "straps" ? p.counts.sts * 3 : totalSts(p);
       } else {
-        return; // non-yarn piece (spots, border, drawstring notes)
+        return; // non-yarn piece (spots chart, border, drawstring notes)
       }
       var cm = sts * (1.0 / dens[g].st) * factor[g] * (p.makeCount || 1) * waste;
       if (cm > 0) {
-        colorCm[ck] += cm;
-        if (ck === "cap") spottedCm += cm;
-        piecesOut.push({ id: p.id, title: p.title, color: ck, meters: Math.round(cm / 100 * 10) / 10, yards: Math.round(cm / 100 * yd * 10) / 10 });
+        addCm(ck, cm);
+        piecesOut.push({ id: p.id, title: p.title, color: ck, meters: round1(cm), yards: round1(cm * yd) });
       }
       // extra yarn segments for consolidated pieces worked in more than one gauge or
       // colour (e.g. the rib band folded into the skirt, the body gill on the flounce)
       (p.extraYarn || []).forEach(function (ex) {
         var xcm = ex.sts * (1.0 / dens[ex.g].st) * factor[ex.g] * (p.makeCount || 1) * waste;
         if (!(xcm > 0)) return;
-        colorCm[ex.color] += xcm;
-        if (ex.color === "cap") spottedCm += xcm;
-        piecesOut.push({ id: p.id + ":" + ex.g, title: ex.title || (p.title + " (extra)"), color: ex.color, meters: Math.round(xcm / 100 * 10) / 10, yards: Math.round(xcm / 100 * yd * 10) / 10 });
+        addCm(ex.color, xcm);
+        piecesOut.push({ id: p.id + ":" + ex.g, title: ex.title || (p.title + " (extra)"), color: ex.color, meters: round1(xcm), yards: round1(xcm * yd) });
       });
     });
-    // Polka spots are an overlay on the cap-coloured areas — only the mushroom set
-    // has them. A generator can opt out (meta.spots === false) so it isn't charged
-    // for spot yarn it never uses.
-    if (meta.spots !== false) {
-      var spotCm = spottedCm * 0.15;
-      colorCm.spot += spotCm;
-      piecesOut.push({ id: "spots", title: "Polka spots", color: "spot", meters: Math.round(spotCm / 100 * 10) / 10, yards: Math.round(spotCm / 100 * yd * 10) / 10 });
+    // A colour OVERLAY: a decorative layer that consumes a fraction of the yarn spent
+    // in another colour's areas (e.g. the mushroom polka spots over the cap-coloured
+    // pieces). It's declared in meta.overlay by the sets that have one, so no colour
+    // is special-cased here and a set without an overlay is simply never charged.
+    var ov = meta.overlay;
+    if (ov && ov.frac > 0) {
+      var ovCm = (colorCm[ov.from] || 0) * ov.frac;
+      if (ovCm > 0) {
+        addCm(ov.to, ovCm);
+        piecesOut.push({ id: ov.id || ov.to, title: ov.title || "Overlay", color: ov.to, meters: round1(ovCm), yards: round1(ovCm * yd) });
+      }
     }
-    var totalCm = colorCm.cap + colorCm.body + colorCm.spot;
-    var byColor = {};
-    ["cap", "body", "spot"].forEach(function (k) {
-      byColor[k] = { name: colors[k] || k, meters: Math.round(colorCm[k] / 100 * 10) / 10, yards: Math.round(colorCm[k] / 100 * yd * 10) / 10 };
+    var totalCm = 0, byColor = {};
+    Object.keys(colors).forEach(function (k) {
+      totalCm += (colorCm[k] || 0);
+      byColor[k] = { name: colors[k] || k, meters: round1(colorCm[k] || 0), yards: round1((colorCm[k] || 0) * yd) };
     });
     return { unit: meta.unit, wastePct: 12, pieces: piecesOut, byColor: byColor,
-      total: { meters: Math.round(totalCm / 100 * 10) / 10, yards: Math.round(totalCm / 100 * yd * 10) / 10 } };
+      total: { meters: round1(totalCm), yards: round1(totalCm * yd) } };
   }
 
   var US_TO_UK = { sc2tog: "dc2tog", hdc2tog: "htr2tog", dc2tog: "tr2tog", fpdc: "fptr", bpdc: "bptr", sc: "dc", hdc: "htr", dc: "tr", tr: "dtr" };

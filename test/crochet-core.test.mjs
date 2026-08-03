@@ -328,6 +328,26 @@ test("yarn estimate is positive, consistent, and grows with a bigger body", () =
   assert.ok(estimateYarn(computePattern(big)).total.meters > est.total.meters);
 });
 
+test("yarn estimate is colour-agnostic: byColor follows the pattern's own roles", () => {
+  // a made-up pattern with non-standard colour roles and a generic overlay — no
+  // "cap"/"spot"/"body" anywhere. estimateYarn must handle it with nothing special-cased.
+  const fake = {
+    meta: {
+      unit: "cm", density: { rib: { st: 2, row: 1 }, hdc: { st: 2, row: 1 }, sc: { st: 2, row: 1 } },
+      colors: { main: "black", trim: "red" },
+      overlay: { from: "main", to: "trim", frac: 0.1, id: "edge", title: "Edging" },
+    },
+    pieces: [{ id: "body", title: "Body", yarn: { g: "hdc", color: "main", sts: 1000 } }],
+  };
+  const y = estimateYarn(fake);
+  assert.ok(y.byColor.main.meters > 0, "main role counted");
+  assert.ok(y.byColor.trim.meters > 0, "overlay adds to the trim role");
+  assert.ok(Math.abs(y.byColor.trim.meters - y.byColor.main.meters * 0.1) < 0.15, "overlay ≈ 10% of main");
+  assert.ok(y.pieces.some((p) => p.id === "edge"), "overlay piece is listed");
+  assert.ok(!("cap" in y.byColor) && !("spot" in y.byColor), "no hardcoded cap/spot buckets");
+  assert.ok(Math.abs((y.byColor.main.meters + y.byColor.trim.meters) - y.total.meters) < 0.05, "roles sum to total");
+});
+
 /* ---------------- silhouettes / terminology ---------------- */
 
 test("sleeveless and strapless omit their pieces", () => {

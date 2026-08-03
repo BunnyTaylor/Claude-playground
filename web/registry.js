@@ -33,14 +33,15 @@ var Registry = {
       // and only offers the roles listed here.
       defaults: {
         colorsHeading: "Colours & spots",
-        palette: { cap: "#B83A2B", spot: "#FCF8EF", body: "#F2E4C9" },
-        colorNames: { cap: "", spot: "", body: "" },
-        roles: [
-          { key: "cap", label: "Cap — flounce, sleeves" },
-          { key: "spot", label: "Spots" },
-          { key: "body", label: "Body — skirt, frills" },
-        ],
         spots: true,
+        // Each colour role: the engine key it maps to, its label, an optional default
+        // name, and a default hex. The studio renders exactly these — a set only ever
+        // has the roles it lists here, nothing is hardcoded.
+        colorRoles: [
+          { key: "cap", label: "Cap — flounce, sleeves", hex: "#B83A2B" },
+          { key: "spot", label: "Spots", hex: "#FCF8EF" },
+          { key: "body", label: "Body — skirt, frills", hex: "#F2E4C9" },
+        ],
       },
       generators: [
         { id: "dress", label: "Dress", emoji: "👗", blurb: "Off-shoulder flounce, lantern sleeves, A-line skirt, gill & hem frills.", compute: "computePattern", inputGroups: ["dressInputs"], schematic: true },
@@ -54,16 +55,14 @@ var Registry = {
       name: "Bat Cloak Set",
       tagline: "A hooded cape whose wide, pointed hem spreads into bat wings when you hold your arms out — with a two-tone eared hood. Sized from your own gauge and wingspan.",
       emoji: "🦇",
-      // Its own dark palette and two colour roles (main + accent) — no spots.
+      // Its own dark look and just two colour roles (main + accent) — no spots.
       defaults: {
         colorsHeading: "Colours",
-        palette: { body: "#17171b", cap: "#8c1622", spot: "#2a2a30" },
-        colorNames: { body: "black", cap: "crimson", spot: "" },
-        roles: [
-          { key: "body", label: "Main — cloak, wings & hood" },
-          { key: "cap", label: "Accent — ear inners, ties & loops" },
-        ],
         spots: false,
+        colorRoles: [
+          { key: "body", label: "Main — cloak, wings & hood", name: "black", hex: "#17171b" },
+          { key: "cap", label: "Accent — ear inners, ties & loops", name: "crimson", hex: "#8c1622" },
+        ],
       },
       generators: [
         { id: "cloak", label: "Cloak", emoji: "🦇", blurb: "Hooded bat cape: shoulder yoke, a flared wing membrane with pointed hem, an eared hood, and thumb loops that pull the drape into wings.", compute: "computeBatCloak", inputGroups: ["batInputs"], schematic: false },

@@ -63,12 +63,14 @@ function gather() {
   if ($("sleeveless").checked) style.sleeveless = true;
   if ($("strapless").checked) style.strapless = true;
 
-  const colors = {
-    cap: ($("capName").value || "").trim() || "cap colour",
-    spot: ($("spotName").value || "").trim() || "spot colour",
-    body: ($("bodyName").value || "").trim() || "body colour",
-  };
-  const palette = { cap: $("capCol").value, spot: $("spotCol").value, body: $("bodyCol").value };
+  // colours: whatever roles the current collection rendered onto the form
+  const colors = {}, palette = {}, names = {};
+  for (const key of renderedRoles()) {
+    const nameEl = $("name_" + key), colEl = $("col_" + key);
+    names[key] = nameEl ? nameEl.value : "";
+    colors[key] = (names[key] || "").trim() || defaultColorName(key);
+    palette[key] = colEl ? colEl.value : "#cccccc";
+  }
   const accessory = {};
   for (const [id, key] of Object.entries(ACC)) accessory[key] = num(id);
 
@@ -77,12 +79,11 @@ function gather() {
     palette,
     ui: {
       name: $("pName").value,
-      names: { capName: $("capName").value, spotName: $("spotName").value, bodyName: $("bodyName").value },
+      names, palette,   // colour role names + picker hexes, keyed by role
       dotSizes: $("dotSizes").value, dotGap: $("dotGap").value,
       waistEase: $("waistEase").value, fullness: $("fullness").value,
       bandEase: $("bandEase").value, ribStyle: $("ribStyle").value,
       flare: $("flare").value, balloon: $("balloon").value,
-      capCol: $("capCol").value, spotCol: $("spotCol").value, bodyCol: $("bodyCol").value,
       // which saved swatch drives each stitch's gauge, so the pickers restore too
       gaugeSel: Object.fromEntries(GAUGES.map((g) => [g, ($(GAUGE_SEL[g]) || {}).value])),
     },
@@ -120,21 +121,22 @@ function apply(state) {
   for (const b of BODY) if (input.body && input.body[b] != null) $(b).value = input.body[b];
 
   $("pName").value = (ui && ui.name) || "";
-  // seed the colour pickers first (the palette hex for each role); rebuildColorSelects
-  // then tints any *named* role from its name, so a named colour wins and an unnamed
-  // one keeps the collection's palette hex.
-  if (ui) {
-    $("capCol").value = ui.capCol || "#B83A2B";
-    $("spotCol").value = ui.spotCol || "#FCF8EF";
-    $("bodyCol").value = ui.bodyCol || "#F2E4C9";
+  // render THIS collection's colour roles, then populate them. Seed each picker with
+  // the saved hex (ui.palette, or a legacy ui.<key>Col from older saves, else the role
+  // default); rebuildColorSelects then tints any *named* role from its name, so a named
+  // colour wins and an unnamed one keeps the palette hex.
+  const coll = collById(state.coll) || curColl;
+  renderColorRoles(coll);
+  const legacyCol = { cap: "capCol", spot: "spotCol", body: "bodyCol" };
+  const desired = {};
+  for (const r of collRoles(coll)) {
+    const key = r.key, colEl = $("col_" + key);
+    const hex = (ui && ui.palette && ui.palette[key]) || (ui && ui[legacyCol[key]]) || r.hex || "#cccccc";
+    if (colEl) colEl.value = hex;
+    const nm = input.colors && input.colors[key];
+    desired[key] = (!nm || nm === defaultColorName(key)) ? "" : nm;
   }
-  // restore the colour dropdowns (add the saved value as an option if the swatch it
-  // came from isn't selected/around), and mirror named colours into the pickers
-  rebuildColorSelects({
-    capName: input.colors.cap === "cap colour" ? "" : input.colors.cap,
-    spotName: input.colors.spot === "spot colour" ? "" : input.colors.spot,
-    bodyName: input.colors.body === "body colour" ? "" : input.colors.body,
-  });
+  rebuildColorSelects(desired);
 
   // prefer the exact strings the user picked (ui.*) so option values match precisely
   // (e.g. "2.0" doesn't round-trip through the number 2); fall back to the style value
@@ -194,57 +196,54 @@ function setGenerator(gen) {
   document.querySelector(".toolbar h2").textContent = "Your " + gen.label.toLowerCase();
 }
 
-/* ---------- per-collection tailoring (colours, defaults, seeding) ---------- */
+/* ---------- per-collection colour roles + defaults ----------
+   Colours are a generic, per-collection LIST of roles — nothing (not "spot", not
+   anything) is special-cased. A collection declares its roles in the registry
+   (colorRoles: [{key,label,name?,hex?}]); the studio renders exactly those, and
+   gather/apply/yarn all read whatever roles are on the form. */
 
-const ROLE_ROW = { cap: "roleCap", spot: "roleSpot", body: "roleBody" };
-// The mushroom set's original look, used as the fallback for any collection that
-// doesn't declare its own defaults.
-const BASE_DEFAULTS = {
-  colorsHeading: "Colours & spots",
-  palette: { cap: "#B83A2B", spot: "#FCF8EF", body: "#F2E4C9" },
-  colorNames: { cap: "", spot: "", body: "" },
-  roles: [
-    { key: "cap", label: "Cap — flounce, sleeves" },
-    { key: "spot", label: "Spots" },
-    { key: "body", label: "Body — skirt, frills" },
-  ],
-  spots: true,
-};
+// Fallback roles (the mushroom set) for any collection without its own.
+const BASE_ROLES = [
+  { key: "cap", label: "Cap — flounce, sleeves", hex: "#B83A2B" },
+  { key: "spot", label: "Spots", hex: "#FCF8EF" },
+  { key: "body", label: "Body — skirt, frills", hex: "#F2E4C9" },
+];
+const BASE_DEFAULTS = { colorsHeading: "Colours & spots", spots: true, colorRoles: BASE_ROLES };
 const collDefaults = (coll) => Object.assign({}, BASE_DEFAULTS, (coll && coll.defaults) || {});
+const collRoles = (coll) => collDefaults(coll).colorRoles || BASE_ROLES;
+// engine sentinel for an unnamed role (kept as "<key> colour" for back-compat)
+const defaultColorName = (key) => key + " colour";
+// the roles currently on the form — the source of truth for gather/rebuild
+const renderedRoles = () => [...document.querySelectorAll("#colorRoles .crow[data-role]")].map((el) => el.dataset.role);
+const collById = (id) => Registry.collections.find((c) => c.id === id);
 
-// Re-label, re-order and show/hide the colour roles (and the spot controls) so each
-// collection's studio shows only the roles that garment uses, in its own order.
-function applyRoleConfig(coll) {
+// Render a collection's colour-role rows (one picker + name select each, in the
+// collection's order), plus its heading and whether the spot controls apply.
+function renderColorRoles(coll) {
   const d = collDefaults(coll);
   $("colorsHeading").textContent = d.colorsHeading;
-  const shown = new Set(d.roles.map((r) => r.key));
-  d.roles.forEach((r, i) => {
-    const row = $(ROLE_ROW[r.key]); if (!row) return;
-    row.hidden = false;
-    row.style.order = i;
-    row.querySelector(".clab").textContent = r.label;
-  });
-  for (const key of Object.keys(ROLE_ROW)) if (!shown.has(key)) $(ROLE_ROW[key]).hidden = true;
   $("spotSizes").hidden = d.spots === false;
+  $("colorRoles").innerHTML = collRoles(coll).map((r) => `
+    <div class="crow" data-role="${r.key}">
+      <input type="color" id="col_${r.key}" value="${r.hex || "#cccccc"}">
+      <div><div class="clab">${esc(r.label)}</div><select id="name_${r.key}"></select></div>
+    </div>`).join("");
 }
 
-// A fresh project's state for a collection: the shared skeleton (gauges, body,
-// style, accessory), re-pointed at this collection + its default colours/palette.
+// A fresh project's state for a collection: the shared skeleton (gauges, body, style,
+// accessory), re-pointed at this collection + its own colour roles.
 function collectionDefaults(coll) {
-  const d = collDefaults(coll);
   const s = DEFAULT_STATE();
   s.coll = coll.id;
   s.gen = coll.generators[0].id;
-  const names = d.colorNames || {}, pal = d.palette || {};
-  s.input.colors = {
-    cap: names.cap || "cap colour",
-    spot: names.spot || "spot colour",
-    body: names.body || "body colour",
-  };
-  s.ui = Object.assign({}, s.ui, {
-    capCol: pal.cap || "#B83A2B", spotCol: pal.spot || "#FCF8EF", bodyCol: pal.body || "#F2E4C9",
-    names: { capName: names.cap || "", spotName: names.spot || "", bodyName: names.body || "" },
-  });
+  const colors = {}, palette = {}, names = {};
+  for (const r of collRoles(coll)) {
+    colors[r.key] = r.name || defaultColorName(r.key);
+    palette[r.key] = r.hex || "#cccccc";
+    names[r.key] = r.name || "";
+  }
+  s.input.colors = colors;
+  s.ui = Object.assign({}, s.ui, { palette, names });
   return s;
 }
 
@@ -260,14 +259,13 @@ function seedForCollection(coll) {
   // over from another set's defaults (e.g. a mushroom-tan "main" on the bat set) is
   // replaced by the collection's own default colour.
   const def = collectionDefaults(coll);
-  const st = { input: { ...w.input, colors: { ...w.input.colors } }, ui: { ...(w.ui || {}) }, coll: coll.id, gen: w.gen };
-  const generic = { cap: "cap colour", spot: "spot colour", body: "body colour" };
-  const uiCol = { cap: "capCol", spot: "spotCol", body: "bodyCol" };
-  for (const role of ["cap", "spot", "body"]) {
-    const nm = st.input.colors[role];
-    if (!nm || nm === generic[role]) {
-      st.input.colors[role] = def.input.colors[role];
-      st.ui[uiCol[role]] = def.ui[uiCol[role]];
+  const st = { input: { ...w.input, colors: { ...(w.input.colors || {}) } }, ui: { ...(w.ui || {}) }, coll: coll.id, gen: w.gen };
+  st.ui.palette = { ...(st.ui.palette || {}) };
+  for (const r of collRoles(coll)) {
+    const nm = st.input.colors[r.key];
+    if (!nm || nm === defaultColorName(r.key)) {          // never deliberately named → follow the set
+      st.input.colors[r.key] = def.input.colors[r.key];
+      st.ui.palette[r.key] = def.ui.palette[r.key];
     }
   }
   apply(st);
@@ -290,7 +288,6 @@ function openStudio(collId, genId, setHash = true) {
   curColl = f.collection;
   document.body.dataset.studioTheme = curColl.id;   // re-skin the whole studio for this set
   buildTypeSwitch(curColl);
-  applyRoleConfig(curColl);   // tailor the colour roles to this collection
   setGenerator(f.generator);
   $("homeView").hidden = true;
   $("swatchView").hidden = true;
@@ -508,16 +505,16 @@ function selectedSwatchColors() {
 // current (or `desired`) choice pickable, and mirror the choice into its colour picker
 function rebuildColorSelects(desired) {
   const cols = selectedSwatchColors();
-  for (const id of Object.keys(COLOR_ROLE)) {
-    const el = $(id); if (!el) continue;
-    const want = desired && (id in desired) ? (desired[id] || "") : el.value;
+  for (const key of renderedRoles()) {
+    const el = $("name_" + key); if (!el) continue;
+    const want = desired && (key in desired) ? (desired[key] || "") : el.value;
     const opts = new Set(cols);
     if (want && want !== "__custom__") opts.add(want);   // keep a loaded/custom value
     el.innerHTML = `<option value="">Default (unnamed)</option>` +
       [...opts].map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("") +
       `<option value="__custom__">✏️ Custom name…</option>`;
     el.value = (want && [...el.options].some((o) => o.value === want)) ? want : "";
-    syncRoleColor(id);
+    syncRoleColor(key);
   }
 }
 
@@ -535,11 +532,12 @@ function nameToHex(name) {
   const key = name.toLowerCase().replace(/[^a-z0-9]/g, "");   // match color-names.js key normalization
   return (typeof COLOR_NAMES !== "undefined" && COLOR_NAMES[key]) || null;
 }
-const COLOR_ROLE = { capName: "capCol", spotName: "spotCol", bodyName: "bodyCol" };
-// if a name field holds a recognised colour name, mirror it into that role's picker
-function syncRoleColor(nameId) {
-  const hex = nameToHex($(nameId).value);
-  if (hex) $(COLOR_ROLE[nameId]).value = hex;
+// if a role's name field holds a recognised colour name, mirror it into that role's picker
+function syncRoleColor(key) {
+  const el = $("name_" + key), col = $("col_" + key);
+  if (!el || !col) return false;
+  const hex = nameToHex(el.value);
+  if (hex) col.value = hex;
   return !!hex;
 }
 
@@ -985,7 +983,7 @@ function renderYarn(yarn) {
   const u = yarn.unit;
   const unitPref = u === "in" ? "yd" : "m";
   const amount = (c) => unitPref === "yd" ? `${c.yards} yd <small>(${c.meters} m)</small>` : `${c.meters} m <small>(${c.yards} yd)</small>`;
-  const cols = ["cap", "body", "spot"].filter((k) => yarn.byColor[k] && yarn.byColor[k].meters > 0).map((k) => {
+  const cols = Object.keys(yarn.byColor).filter((k) => yarn.byColor[k].meters > 0).map((k) => {
     const c = yarn.byColor[k];
     return `<div class="cc"><div class="n">${esc(c.name)}</div><div class="v">${amount(c)}</div></div>`;
   }).join("");
@@ -1336,18 +1334,24 @@ function wire() {
       generate();
     });
   }
-  // picking a colour (or "Custom name…") sets the role and mirrors it into the picker
-  for (const nameId of Object.keys(COLOR_ROLE)) {
-    $(nameId).addEventListener("change", () => {
-      if ($(nameId).value === "__custom__") {
+  // colour rows are rendered per collection, so delegate: a name select sets the role
+  // (or prompts for a custom name) and mirrors it into the picker; a picker just redraws
+  $("colorRoles").addEventListener("change", (e) => {
+    const sel = e.target.closest("select[id^='name_']");
+    if (sel) {
+      const key = sel.id.slice(5);
+      if (sel.value === "__custom__") {
         const v = (prompt("Colour name for this role:", "") || "").trim();
-        rebuildColorSelects({ [nameId]: v });   // add it as an option and select it
-      } else {
-        syncRoleColor(nameId);
-      }
+        rebuildColorSelects({ [key]: v });   // add it as an option and select it
+      } else syncRoleColor(key);
       scheduleGenerate();
-    });
-  }
+    } else if (e.target.matches("input[type=color]")) {
+      scheduleGenerate();
+    }
+  });
+  $("colorRoles").addEventListener("input", (e) => {
+    if (e.target.matches("input[type=color]")) scheduleGenerate();
+  });
   $("swatches").addEventListener("click", (e) => {
     const use = e.target.closest("[data-usesw]");
     const del = e.target.closest("[data-delsw]");
@@ -1543,7 +1547,8 @@ function DEFAULT_STATE() {
     },
     coll: "mushroom",
     gen: "dress",
-    ui: { name: "", capCol: "#B83A2B", spotCol: "#FCF8EF", bodyCol: "#F2E4C9" },
+    // colour ui (palette/names) is filled per collection by collectionDefaults()
+    ui: { name: "" },
   };
 }
 

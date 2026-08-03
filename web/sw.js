@@ -9,7 +9,7 @@
  * (The previous version was cache-first, which meant a returning visitor kept
  * seeing the first files their browser ever cached — updates never showed.)
  */
-const CACHE = "mushroom-v10";
+const CACHE = "mushroom-v11";
 const ASSETS = [
   "./",
   "index.html",
