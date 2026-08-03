@@ -98,6 +98,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);b
 .seg button.on{background:linear-gradient(180deg,var(--green-lite),var(--green));color:#fff;
   box-shadow:var(--sh-btn),0 1px 0 rgba(255,255,255,.3) inset;}
 
+#colorRoles{display:flex;flex-direction:column;}
 .crow{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;margin-bottom:9px;}
 input[type=color]{width:44px;height:42px;padding:3px;border:1.5px solid var(--line);
   border-radius:12px;background:#fff;cursor:pointer;box-shadow:var(--sh-sm);}
@@ -187,7 +188,7 @@ table.uk td:first-child{font-weight:700;color:var(--green-deep);}
 .counter.inc{border-color:var(--green);box-shadow:0 0 0 3px var(--focus),var(--sh-sm);}
 .counter.dec{border-color:var(--amber);box-shadow:0 0 0 3px rgba(214,158,46,.18),var(--sh-sm);}
 /* buttons pinned to the edges so they never move; round label centred between them */
-.crow{display:flex;align-items:center;justify-content:space-between;gap:9px;}
+.crnrow{display:flex;align-items:center;justify-content:space-between;gap:9px;}
 .cbtn{width:44px;height:44px;flex:0 0 auto;border:none;border-radius:12px;
   background:linear-gradient(180deg,var(--green-lite),var(--green));
   color:#fff;font-size:23px;font-weight:800;cursor:pointer;line-height:1;

@@ -27,6 +27,21 @@ var Registry = {
       name: "Amanita Mushroom Set",
       tagline: "A spotted off-shoulder dress with a matching bucket hat, drawstring bag, and mycelium tights — all sized from the same gauge, colours and spots so the set matches.",
       emoji: "🍄",
+      // Per-collection studio defaults — what makes this set's page its own: its
+      // colour palette, the colour-role labels (which garment part each is), and
+      // whether the spot controls apply. The studio seeds a fresh project from these
+      // and only offers the roles listed here.
+      defaults: {
+        colorsHeading: "Colours & spots",
+        palette: { cap: "#B83A2B", spot: "#FCF8EF", body: "#F2E4C9" },
+        colorNames: { cap: "", spot: "", body: "" },
+        roles: [
+          { key: "cap", label: "Cap — flounce, sleeves" },
+          { key: "spot", label: "Spots" },
+          { key: "body", label: "Body — skirt, frills" },
+        ],
+        spots: true,
+      },
       generators: [
         { id: "dress", label: "Dress", emoji: "👗", blurb: "Off-shoulder flounce, lantern sleeves, A-line skirt, gill & hem frills.", compute: "computePattern", inputGroups: ["dressInputs"], schematic: true },
         { id: "hat", label: "Hat", emoji: "🎩", blurb: "Mushroom-cap bucket hat: domed spotted crown, flared brim, gill frill.", compute: "computeHat", inputGroups: ["hatInputs"], schematic: false },
@@ -39,6 +54,17 @@ var Registry = {
       name: "Bat Cloak Set",
       tagline: "A hooded cape whose wide, pointed hem spreads into bat wings when you hold your arms out — with a two-tone eared hood. Sized from your own gauge and wingspan.",
       emoji: "🦇",
+      // Its own dark palette and two colour roles (main + accent) — no spots.
+      defaults: {
+        colorsHeading: "Colours",
+        palette: { body: "#17171b", cap: "#8c1622", spot: "#2a2a30" },
+        colorNames: { body: "black", cap: "crimson", spot: "" },
+        roles: [
+          { key: "body", label: "Main — cloak, wings & hood" },
+          { key: "cap", label: "Accent — ear inners, ties & loops" },
+        ],
+        spots: false,
+      },
       generators: [
         { id: "cloak", label: "Cloak", emoji: "🦇", blurb: "Hooded bat cape: shoulder yoke, a flared wing membrane with pointed hem, an eared hood, and thumb loops that pull the drape into wings.", compute: "computeBatCloak", inputGroups: ["batInputs"], schematic: false },
       ],

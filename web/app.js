@@ -120,8 +120,16 @@ function apply(state) {
   for (const b of BODY) if (input.body && input.body[b] != null) $(b).value = input.body[b];
 
   $("pName").value = (ui && ui.name) || "";
+  // seed the colour pickers first (the palette hex for each role); rebuildColorSelects
+  // then tints any *named* role from its name, so a named colour wins and an unnamed
+  // one keeps the collection's palette hex.
+  if (ui) {
+    $("capCol").value = ui.capCol || "#B83A2B";
+    $("spotCol").value = ui.spotCol || "#FCF8EF";
+    $("bodyCol").value = ui.bodyCol || "#F2E4C9";
+  }
   // restore the colour dropdowns (add the saved value as an option if the swatch it
-  // came from isn't selected/around), and mirror into the pickers
+  // came from isn't selected/around), and mirror named colours into the pickers
   rebuildColorSelects({
     capName: input.colors.cap === "cap colour" ? "" : input.colors.cap,
     spotName: input.colors.spot === "spot colour" ? "" : input.colors.spot,
@@ -140,11 +148,6 @@ function apply(state) {
   setSelect("balloon", pick("balloon", S.balloon));
   setSelect("ribStyle", pick("ribStyle", S.ribStyle || "sideways"));
   setSelect("bandEase", pick("bandEase", S.bandEase != null ? String(S.bandEase) : "auto"));
-  if (ui) {
-    $("capCol").value = ui.capCol || "#B83A2B";
-    $("spotCol").value = ui.spotCol || "#FCF8EF";
-    $("bodyCol").value = ui.bodyCol || "#F2E4C9";
-  }
 }
 
 function setSelect(id, val) {
@@ -160,7 +163,7 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 // so the app is a static site — no server, works offline and on GitHub Pages.
 function generate() {
   const { input, palette, ui } = gather();
-  localStorage.setItem(LS_WORKING, JSON.stringify({ input, ui, coll: curColl.id, gen: curGen.id }));
+  saveWorkingFor(curColl.id, { input, ui, gen: curGen.id });
   try {
     let result = CrochetCore[curGen.compute](input);
     result = CrochetCore.convertTerms(result, input.terms || "US");
@@ -191,6 +194,70 @@ function setGenerator(gen) {
   document.querySelector(".toolbar h2").textContent = "Your " + gen.label.toLowerCase();
 }
 
+/* ---------- per-collection tailoring (colours, defaults, seeding) ---------- */
+
+const ROLE_ROW = { cap: "roleCap", spot: "roleSpot", body: "roleBody" };
+// The mushroom set's original look, used as the fallback for any collection that
+// doesn't declare its own defaults.
+const BASE_DEFAULTS = {
+  colorsHeading: "Colours & spots",
+  palette: { cap: "#B83A2B", spot: "#FCF8EF", body: "#F2E4C9" },
+  colorNames: { cap: "", spot: "", body: "" },
+  roles: [
+    { key: "cap", label: "Cap — flounce, sleeves" },
+    { key: "spot", label: "Spots" },
+    { key: "body", label: "Body — skirt, frills" },
+  ],
+  spots: true,
+};
+const collDefaults = (coll) => Object.assign({}, BASE_DEFAULTS, (coll && coll.defaults) || {});
+
+// Re-label, re-order and show/hide the colour roles (and the spot controls) so each
+// collection's studio shows only the roles that garment uses, in its own order.
+function applyRoleConfig(coll) {
+  const d = collDefaults(coll);
+  $("colorsHeading").textContent = d.colorsHeading;
+  const shown = new Set(d.roles.map((r) => r.key));
+  d.roles.forEach((r, i) => {
+    const row = $(ROLE_ROW[r.key]); if (!row) return;
+    row.hidden = false;
+    row.style.order = i;
+    row.querySelector(".clab").textContent = r.label;
+  });
+  for (const key of Object.keys(ROLE_ROW)) if (!shown.has(key)) $(ROLE_ROW[key]).hidden = true;
+  $("spotSizes").hidden = d.spots === false;
+}
+
+// A fresh project's state for a collection: the shared skeleton (gauges, body,
+// style, accessory), re-pointed at this collection + its default colours/palette.
+function collectionDefaults(coll) {
+  const d = collDefaults(coll);
+  const s = DEFAULT_STATE();
+  s.coll = coll.id;
+  s.gen = coll.generators[0].id;
+  const names = d.colorNames || {}, pal = d.palette || {};
+  s.input.colors = {
+    cap: names.cap || "cap colour",
+    spot: names.spot || "spot colour",
+    body: names.body || "body colour",
+  };
+  s.ui = Object.assign({}, s.ui, {
+    capCol: pal.cap || "#B83A2B", spotCol: pal.spot || "#FCF8EF", bodyCol: pal.body || "#F2E4C9",
+    names: { capName: names.cap || "", spotName: names.spot || "", bodyName: names.body || "" },
+  });
+  return s;
+}
+
+// Seed the studio form for a collection: restore its last working config if there is
+// one, otherwise fall back to that collection's defaults. Tracks which collection the
+// form currently reflects so we don't re-seed (and clobber edits) on incidental opens.
+let seededColl = null;
+function seedForCollection(coll) {
+  const w = loadAllWorking()[coll.id];
+  apply(w && w.input ? { input: w.input, ui: w.ui, coll: coll.id, gen: w.gen } : collectionDefaults(coll));
+  seededColl = coll.id;
+}
+
 /* ---------- home / studio routing ---------- */
 
 function showHome() {
@@ -205,10 +272,16 @@ function openStudio(collId, genId, setHash = true) {
   const f = Registry.find(collId, genId) || Registry.find(curColl.id, curColl.generators[0].id);
   curColl = f.collection;
   buildTypeSwitch(curColl);
+  applyRoleConfig(curColl);   // tailor the colour roles to this collection
   setGenerator(f.generator);
   $("homeView").hidden = true;
   $("swatchView").hidden = true;
   $("studioView").hidden = false;
+  // Seed this collection's form when first entering it (not when a project is loaded,
+  // and not on incidental re-opens like picking a swatch — those keep the live form).
+  if (activeId != null) seededColl = null;
+  else if (seededColl !== curColl.id) seedForCollection(curColl);
+  renderProjects();           // the sidebar shows only THIS collection's projects
   populateGaugeSelectors();   // refresh pickers so newly-saved swatches show up
   if (setHash) location.hash = "#/" + curColl.id + "/" + f.generator.id;
   generate();
@@ -829,7 +902,7 @@ function saveSwatchFromTool(use) {
 }
 
 function renderHomeProjects() {
-  const projects = loadProjects();
+  const projects = allProjectsFlat();   // the home page shows every collection's projects
   const ids = Object.keys(projects).sort((a, b) => projects[b].savedAt - projects[a].savedAt);
   if (!ids.length) { $("homeProjects").innerHTML = ""; return; }
   $("homeProjects").innerHTML = `<div class="homeproj"><h2>Your projects</h2><div class="hplist">` +
@@ -912,7 +985,7 @@ function counterHTML(p) {
   // the hint (sts count + increase/decrease) lives below the buttons and reserves
   // its own space, so showing/hiding it can't nudge the buttons or the instructions.
   return `<div class="counter" data-piece="${p.id}">
-    <div class="crow">
+    <div class="crnrow">
       <button class="cbtn" data-d="-1" aria-label="previous round">−</button>
       <div class="crnd"></div>
       <button class="cbtn" data-d="1" aria-label="next round">＋</button>
@@ -923,7 +996,10 @@ function counterHTML(p) {
 }
 
 const progressAll = () => { try { return JSON.parse(localStorage.getItem(LS_PROGRESS)) || {}; } catch { return {}; } };
-const curProj = () => activeId || "working";
+// Row counts / focus are keyed by project id, or by a per-collection "working" sentinel
+// for an unsaved session (so the mushroom and bat working counters don't collide).
+const workingKey = () => "working:" + curColl.id;
+const curProj = () => activeId || workingKey();
 
 /* ---------- focus mode (collapse to the current row) ---------- */
 // One global toggle per project (not per piece): when on, every card collapses to
@@ -1031,16 +1107,42 @@ function fmtCount(v) {
   return v;
 }
 
-/* ---------- projects (localStorage) ---------- */
+/* ---------- projects + working config (localStorage, scoped per collection) ----------
+   Both stores are keyed by collection id so each set has its own saved projects and
+   its own auto-restored working config. Older flat data is migrated on read. */
 
-const loadProjects = () => { try { return JSON.parse(localStorage.getItem(LS_PROJECTS)) || {}; } catch { return {}; } };
-const saveProjects = (p) => localStorage.setItem(LS_PROJECTS, JSON.stringify(p));
+// Projects: new shape is { [collId]: { [projId]: {savedAt,state} } }. Old shape was a
+// flat { [projId]: {savedAt,state} } — detect it (values carry .savedAt) and bucket by
+// each project's recorded collection.
+function migrateProjectsShape(raw) {
+  if (!Object.values(raw).some((v) => v && v.savedAt)) return raw;
+  const bucketed = {};
+  for (const [id, pr] of Object.entries(raw)) {
+    const c = (pr.state && pr.state.coll) || "mushroom";
+    (bucketed[c] = bucketed[c] || {})[id] = pr;
+  }
+  return bucketed;
+}
+const loadAllProjects = () => { try { return migrateProjectsShape(JSON.parse(localStorage.getItem(LS_PROJECTS)) || {}); } catch { return {}; } };
+const saveAllProjects = (all) => localStorage.setItem(LS_PROJECTS, JSON.stringify(all));
+const loadProjects = () => loadAllProjects()[curColl.id] || {};   // just this collection's
+function projectColl(id) { const all = loadAllProjects(); for (const c in all) if (all[c][id]) return c; return null; }
+function allProjectsFlat() { const all = loadAllProjects(), out = {}; for (const c in all) for (const id in all[c]) out[id] = all[c][id]; return out; }
+
+// Working config: { [collId]: { input, ui, gen } }. Old shape was a single object with
+// a `coll` field — wrap it under that collection.
+function migrateWorkingShape(raw) {
+  if (raw && raw.input && raw.coll) return { [raw.coll]: { input: raw.input, ui: raw.ui, gen: raw.gen } };
+  return raw || {};
+}
+const loadAllWorking = () => { try { return migrateWorkingShape(JSON.parse(localStorage.getItem(LS_WORKING)) || {}); } catch { return {}; } };
+function saveWorkingFor(collId, st) { const all = loadAllWorking(); all[collId] = st; localStorage.setItem(LS_WORKING, JSON.stringify(all)); }
 
 function renderProjects() {
   const projects = loadProjects();
   const ids = Object.keys(projects).sort((a, b) => projects[b].savedAt - projects[a].savedAt);
   const list = $("projList");
-  if (!ids.length) { list.innerHTML = `<div class="empty">No saved projects yet — hit Save.</div>`; return; }
+  if (!ids.length) { list.innerHTML = `<div class="empty">No saved ${esc(curColl.name)} projects yet — hit Save.</div>`; return; }
   list.innerHTML = ids.map((id) => {
     const pr = projects[id];
     const d = new Date(pr.savedAt);
@@ -1057,19 +1159,21 @@ function saveCurrent() {
   state.coll = curColl.id;
   state.gen = curGen.id;
   if (!state.ui.name.trim()) state.ui.name = "Untitled";
-  const projects = loadProjects();
+  const all = loadAllProjects();
+  const bucket = all[curColl.id] = all[curColl.id] || {};
   const wasWorking = !activeId;
   const id = activeId || ("p" + Date.now().toString(36));
-  projects[id] = { savedAt: Date.now(), state };
-  saveProjects(projects);
-  // Carry the unsaved "working" row counts + focus state over to the new project id,
+  bucket[id] = { savedAt: Date.now(), state };
+  saveAllProjects(all);
+  // Carry the unsaved working row counts + focus state over to the new project id,
   // so first-time Save doesn't lose the rounds already tracked.
   if (wasWorking) {
+    const wkey = workingKey();
     for (const [LS, migrate] of [[LS_PROGRESS, progressAll], [LS_FOCUS, focusAll]]) {
-      const all = migrate();
-      if (all.working !== undefined && all[id] === undefined) {
-        all[id] = all.working;
-        localStorage.setItem(LS, JSON.stringify(all));
+      const a = migrate();
+      if (a[wkey] !== undefined && a[id] === undefined) {
+        a[id] = a[wkey];
+        localStorage.setItem(LS, JSON.stringify(a));
       }
     }
   }
@@ -1079,18 +1183,18 @@ function saveCurrent() {
 }
 
 function loadProject(id) {
-  const pr = loadProjects()[id];
+  const coll = projectColl(id);
+  const pr = coll && loadAllProjects()[coll][id];
   if (!pr) return;
   activeId = id;
   apply(pr.state);
-  renderProjects();
-  openStudio(pr.state.coll || "mushroom", pr.state.gen || "dress");  // switches generator + generates
+  openStudio(pr.state.coll || coll, pr.state.gen || Registry.collections[0].generators[0].id);
 }
 
 function deleteProject(id) {
-  const projects = loadProjects();
-  delete projects[id];
-  saveProjects(projects);
+  const all = loadAllProjects();
+  const coll = projectColl(id);
+  if (coll) { delete all[coll][id]; saveAllProjects(all); }
   if (activeId === id) activeId = null;
   renderProjects();
 }
@@ -1188,7 +1292,7 @@ function wire() {
   // home gallery + back + home project list + hash routing
   $("collections").addEventListener("click", (e) => {
     const card = e.target.closest(".gcard[data-gen]");
-    if (card) openStudio(card.dataset.coll, card.dataset.gen);
+    if (card) { activeId = null; seededColl = null; openStudio(card.dataset.coll, card.dataset.gen); }
   });
   $("homeProjects").addEventListener("click", (e) => {
     const load = e.target.closest(".hp[data-load]");
@@ -1270,7 +1374,8 @@ function wire() {
   $("saveBtn").addEventListener("click", saveCurrent);
   $("newBtn").addEventListener("click", () => {
     activeId = null;
-    apply(DEFAULT_STATE());
+    apply(collectionDefaults(curColl));   // this collection's own defaults, not the mushroom set's
+    seededColl = curColl.id;
     renderProjects();
     generate();
     $("status").textContent = "new project";
@@ -1334,8 +1439,8 @@ function wire() {
 
 function exportAll() {
   const bundle = {
-    kind: "mushroom-dress-projects", version: 1, exportedAt: new Date().toISOString(),
-    projects: loadProjects(), progress: progressAll(),
+    kind: "mushroom-dress-projects", version: 2, exportedAt: new Date().toISOString(),
+    projects: loadAllProjects(), progress: progressAll(),   // projects nested by collection
   };
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
@@ -1353,14 +1458,17 @@ function importFile(e) {
   reader.onload = () => {
     try {
       const b = JSON.parse(reader.result);
-      const incoming = b.projects || (b.kind ? {} : b); // accept a raw project map too
-      const merged = { ...loadProjects(), ...incoming };
-      saveProjects(merged);
+      // accept a v2 bundle (nested by collection), a v1 bundle / raw flat map (migrated)
+      const incoming = migrateProjectsShape(b.projects || (b.kind ? {} : b));
+      const all = loadAllProjects();
+      for (const c in incoming) all[c] = { ...(all[c] || {}), ...incoming[c] };
+      saveAllProjects(all);
       if (b.progress) {
         localStorage.setItem(LS_PROGRESS, JSON.stringify({ ...progressAll(), ...b.progress }));
       }
       renderProjects();
-      $("status").textContent = `imported ${Object.keys(incoming).length} project(s)`;
+      const count = Object.values(incoming).reduce((n, bk) => n + Object.keys(bk).length, 0);
+      $("status").textContent = `imported ${count} project(s)`;
     } catch (err) {
       $("status").textContent = "import failed: " + err.message;
     }
@@ -1422,14 +1530,25 @@ function DEFAULT_STATE() {
 
 /* ---------- boot ---------- */
 
+// One-time: the row-counter/focus stores used a single "working" sentinel before the
+// counters were scoped per collection. Rename it to the mushroom set's working key so
+// an in-progress unsaved count isn't orphaned.
+function migrateLegacyWorkingKey() {
+  for (const LS of [LS_PROGRESS, LS_FOCUS]) {
+    let a; try { a = JSON.parse(localStorage.getItem(LS)) || {}; } catch { a = {}; }
+    if (a.working !== undefined && a["working:mushroom"] === undefined) {
+      a["working:mushroom"] = a.working;
+      delete a.working;
+      localStorage.setItem(LS, JSON.stringify(a));
+    }
+  }
+}
+
 (function boot() {
   wire();
   fillReference();
-  let working = null;
-  try { working = JSON.parse(localStorage.getItem(LS_WORKING)); } catch { working = null; }
-  if (working && working.input) apply(working);   // prime the form fields
-  renderProjects();
+  migrateLegacyWorkingKey();
   populateSwatchSelect();
   buildTypeSwitch(curColl);
-  route();   // #/coll/gen → that studio; otherwise the home page
+  route();   // #/coll/gen → seeds + opens that studio; otherwise the home page
 })();
