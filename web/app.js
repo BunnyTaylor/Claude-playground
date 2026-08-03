@@ -14,7 +14,7 @@ let unit = "cm";
 let terms = "US";
 let curColl = Registry.collections[0];          // current collection
 let curGen = curColl.generators[0];             // current generator (dress/hat/bag/…)
-const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs", "tightsInputs"];
+const INPUT_GROUPS = ["dressInputs", "hatInputs", "bagInputs", "tightsInputs", "batInputs"];
 let activeId = null;          // id of the currently-loaded saved project
 let debounceTimer = null;
 let pendingStatus = null;    // one-shot status message for the next generate() (survives the debounce)
@@ -25,7 +25,7 @@ let LAST = null;             // most recent /api/pattern response
 const GAUGES = ["rib", "hdc", "sc"];
 const GFIELDS = { Sts: "sts", Rows: "rows", W: "width", H: "height" };
 const BODY = ["bust", "waist", "upperBust", "hip", "upperArm", "wrist", "skirtLen", "sleeveLen"];
-const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen", tWaist: "waist", tHip: "hip", thigh: "thigh", ankle: "ankle", inseam: "inseam", rise: "rise" };
+const ACC = { headCirc: "headCirc", sideHeight: "sideHeight", brimWidth: "brimWidth", diameter: "diameter", bagHeight: "height", strapLen: "strapLen", tWaist: "waist", tHip: "hip", thigh: "thigh", ankle: "ankle", inseam: "inseam", rise: "rise", batWingspan: "wingspan", batLength: "cloakLen", batNeck: "neckOpen", batShoulders: "shoulders", batHood: "hoodDepth" };
 // measurement fields that must be numerically converted when the unit changes
 const CONVERT = [...BODY, ...Object.keys(ACC)];
 // The studio's active gauge now comes from picking saved swatches (per stitch),
@@ -946,13 +946,13 @@ function focusSteps(p, r) {
   const steps = p.steps, n = steps.length;
   if (!p.progress) return steps.map((_, i) => i);
   const total = p.progress.total;
-  const anchorOf = (lb) => { const m = /^Rnd (\d+)\b/.exec(lb) || /\(Rnd (\d+)\)/.exec(lb); return m ? +m[1] : null; };
+  const anchorOf = (lb) => { const m = /^R(?:nd|ow) (\d+)\b/.exec(lb) || /\(R(?:nd|ow) (\d+)\)/.exec(lb); return m ? +m[1] : null; };
   const anchors = steps.map((s) => anchorOf(s[0]));
   let firstAnchor = anchors.findIndex((a) => a !== null);
   if (firstAnchor < 0) firstAnchor = n;
   const setUpRnd = firstAnchor < n ? anchors[firstAnchor] : 1;
   const bandRnds = Math.max(0, setUpRnd - 1);
-  const isRepeat = (i) => anchors[i] === null && /rep to rnd|not listed|each st around|work plain|each ch around|every row/i.test(steps[i][1]);
+  const isRepeat = (i) => anchors[i] === null && /rep to rnd|rep to row|not listed|each st around|each st across|work plain|work even|each ch around|every row/i.test(steps[i][1]);
   let lastAnchor = -1;
   for (let i = 0; i < n; i++) if (anchors[i] !== null) lastAnchor = i;
   if (r >= total && total > 0) {                          // done → the finishing steps
@@ -1009,7 +1009,7 @@ function syncCounters() {
     const dir = r > 0 && cur > prev ? "increase" : r > 0 && cur < prev ? "decrease" : "";
     el.classList.toggle("inc", dir === "increase");
     el.classList.toggle("dec", dir === "decrease");
-    el.querySelector(".crnd").textContent = done ? `✓ done` : `Rnd ${r} / ${prog.total}`;
+    el.querySelector(".crnd").textContent = done ? `✓ done` : `${prog.unit || "Rnd"} ${r} / ${prog.total}`;
     el.querySelector(".chint").innerHTML =
       `${cur} sts${dir ? ` · <span class="cinc">${dir}</span>` : ""}`;
     el.querySelector(".cbar > i").style.width = `${Math.round(r / prog.total * 100)}%`;
@@ -1411,7 +1411,7 @@ function DEFAULT_STATE() {
       },
       body: { bust: 92, waist: 74, upperBust: 84, hip: 98, upperArm: 30, wrist: 16, skirtLen: 45, sleeveLen: 50 },
       style: { waistEase: -5, fullness: 2.0, flare: 1.8, balloon: 1.4, dotDia: 2.5, dotGap: 1.2, dotSizes: [1.5, 2.5, 3.5], ribStyle: "sideways" },
-      accessory: { headCirc: 56, sideHeight: 8, brimWidth: 5, diameter: 18, height: 22, strapLen: 70 },
+      accessory: { headCirc: 56, sideHeight: 8, brimWidth: 5, diameter: 18, height: 22, strapLen: 70, wingspan: 150, cloakLen: 90, neckOpen: 44, shoulders: 42, hoodDepth: 36 },
       colors: { cap: "cap colour", spot: "spot colour", body: "body colour" },
     },
     coll: "mushroom",

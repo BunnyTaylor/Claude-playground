@@ -34,6 +34,15 @@ var Registry = {
         { id: "tights", label: "Tights", emoji: "🧦", blurb: "Footless tights with an embroidered mycelium web — the roots of your mushroom body.", compute: "computeTights", inputGroups: ["tightsInputs"], schematic: false },
       ],
     },
+    {
+      id: "bat",
+      name: "Bat Cloak Set",
+      tagline: "A hooded cape whose wide, pointed hem spreads into bat wings when you hold your arms out — with a two-tone eared hood. Sized from your own gauge and wingspan.",
+      emoji: "🦇",
+      generators: [
+        { id: "cloak", label: "Cloak", emoji: "🦇", blurb: "Hooded bat cape: shoulder yoke, a flared wing membrane with pointed hem, an eared hood, and thumb loops that pull the drape into wings.", compute: "computeBatCloak", inputGroups: ["batInputs"], schematic: false },
+      ],
+    },
   ],
 
   find: function (collectionId, generatorId) {

@@ -441,16 +441,70 @@ var CrochetViz = (function (Core) {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the mycelium tights">' + parts.join("") + "</svg>";
   }
 
+  // Front view of the bat cloak worn with the arms spread: a hooded cape whose
+  // wide, pointed hem forms the wings, with two ears on the hood.
+  function renderBatCloakSvg(result, inp, palette, opts) {
+    opts = opts || {};
+    var width = opts.width || 520, height = opts.height || 600;
+    var pal = mkPal(palette);
+    var meta = result.meta, u = meta.unit;
+    var cx = width / 2;
+    var span = meta.wingspan, len = meta.length, neck = meta.neckOpen;
+    var scale = Math.min((width * 0.9) / span, (height * 0.6) / Math.max(len, 1));
+    var hemHalf = (span / 2) * scale;
+    var neckHalf = Math.max(14, (neck / 2) * scale);
+    var yNeck = height * 0.26, yHem = yNeck + len * scale;
+    var nPts = Math.max(3, meta.points || 9);
+    var parts = [];
+    parts.push('<rect width="' + width + '" height="' + height + '" fill="' + pal.bg + '"/>');
+
+    // wing membrane: neck (narrow) → hem (wide) with a pointed lower edge
+    var seg = (2 * hemHalf) / nPts, ptDepth = Math.min(seg * 1.0, len * scale * 0.16);
+    var d = "M " + e(cx - neckHalf) + " " + e(yNeck) + " L " + e(cx - hemHalf) + " " + e(yHem - ptDepth);
+    for (var i = 0; i < nPts; i++) {
+      var tipX = cx - hemHalf + (i + 0.5) * seg;
+      var notchX = cx - hemHalf + (i + 1) * seg;
+      d += " L " + e(tipX) + " " + e(yHem) + " L " + e(notchX) + " " + e(yHem - ptDepth);
+    }
+    d += " L " + e(cx + neckHalf) + " " + e(yNeck) + " Z";
+    parts.push('<path d="' + d + '" fill="' + pal.body + '" stroke="' + pal.capDeep + '" stroke-width="2" stroke-linejoin="round"/>');
+    // open front: a soft centre seam line
+    parts.push('<line x1="' + e(cx) + '" y1="' + e(yNeck + 4) + '" x2="' + e(cx) + '" y2="' + e(yHem - ptDepth * 0.5) + '" stroke="' + pal.capDeep + '" stroke-width="1.5" stroke-dasharray="4 5" opacity="0.5"/>');
+    // wrist / thumb-loop marks at the lower front corners
+    [cx - hemHalf, cx + hemHalf].forEach(function (lx) {
+      parts.push('<circle cx="' + e(lx) + '" cy="' + e(yHem - ptDepth) + '" r="4.5" fill="none" stroke="' + pal.cap + '" stroke-width="2.5"/>');
+    });
+
+    // hood: a dome above the neckline, with a face opening
+    var hoodW = neckHalf * 1.5, hoodH = Math.max(40, (meta.hoodDepth || 36) * scale * 0.8);
+    parts.push('<path d="M ' + e(cx - hoodW) + ' ' + e(yNeck + 4) + ' C ' + e(cx - hoodW) + ' ' + e(yNeck - hoodH) + ', ' + e(cx + hoodW) + ' ' + e(yNeck - hoodH) + ', ' + e(cx + hoodW) + ' ' + e(yNeck + 4) + ' Z" fill="' + pal.body + '" stroke="' + pal.capDeep + '" stroke-width="2"/>');
+    parts.push('<ellipse cx="' + e(cx) + '" cy="' + e(yNeck - hoodH * 0.28) + '" rx="' + e(hoodW * 0.52) + '" ry="' + e(hoodH * 0.42) + '" fill="' + pal.bg + '" opacity="0.9"/>');
+
+    // two ears on top of the hood (outer body, inner accent)
+    var ey = yNeck - hoodH;
+    [-1, 1].forEach(function (sgn) {
+      var bx = cx + sgn * hoodW * 0.5;               // base centre
+      var bw = hoodW * 0.34, eh = hoodH * 0.95;
+      var ax = bx + sgn * bw * 0.5, ay = ey - eh;    // apex, leaning outward
+      parts.push('<path d="M ' + e(bx - bw / 2) + ' ' + e(ey + 6) + ' L ' + e(ax) + ' ' + e(ay) + ' L ' + e(bx + bw / 2) + ' ' + e(ey + 6) + ' Z" fill="' + pal.body + '" stroke="' + pal.capDeep + '" stroke-width="2" stroke-linejoin="round"/>');
+      parts.push('<path d="M ' + e(bx - bw * 0.28) + ' ' + e(ey + 2) + ' L ' + e((ax + bx) / 2) + ' ' + e(ay + eh * 0.34) + ' L ' + e(bx + bw * 0.28) + ' ' + e(ey + 2) + ' Z" fill="' + pal.cap + '"/>');
+    });
+
+    parts.push('<text x="' + cx + '" y="' + (height - 16) + '" text-anchor="middle" font-family="Georgia, serif" font-size="14" fill="' + CAPTION_INK + '">bat cloak · wingspan ' + esc(fmt(span, u)) + ' · length ' + esc(fmt(len, u)) + '</text>');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" role="img" aria-label="Preview of the hooded bat cloak with pointed wings and ears">' + parts.join("") + "</svg>";
+  }
+
   // dispatcher by garment kind
   function render(result, inp, palette, opts) {
     var kind = result.meta && result.meta.kind;
     if (kind === "hat") return renderHatSvg(result, inp, palette, opts);
     if (kind === "bag") return renderBagSvg(result, inp, palette, opts);
     if (kind === "tights") return renderTightsSvg(result, inp, palette, opts);
+    if (kind === "batcloak") return renderBatCloakSvg(result, inp, palette, opts);
     return renderDressSvg(result, inp, palette, opts);
   }
 
-  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg, renderHatSvg: renderHatSvg, renderBagSvg: renderBagSvg, renderTightsSvg: renderTightsSvg, render: render };
+  return { DEFAULT_PALETTE: DEFAULT_PALETTE, renderDressSvg: renderDressSvg, renderHatSvg: renderHatSvg, renderBagSvg: renderBagSvg, renderTightsSvg: renderTightsSvg, renderBatCloakSvg: renderBatCloakSvg, render: render };
 })(typeof CrochetCore !== "undefined" ? CrochetCore : require("./crochet-core.js"));
 
 if (typeof module !== "undefined" && module.exports) module.exports = CrochetViz;

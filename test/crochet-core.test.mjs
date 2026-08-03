@@ -15,9 +15,11 @@ const Core = require("../web/crochet-core.js");
 const Viz = require("../web/crochet-viz.js");
 
 const {
-  computePattern, computeHat, computeBag, computeTights, decPlan, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
+  computePattern, computeHat, computeBag, computeTights, computeBatCloak, decPlan, defaultInput, DEFAULT_INPUT, incPlan, evenAdjust,
   spotChart, spotCharts, estimateYarn, convertTerms, density, even, mult, toCm, fromCm,
 } = Core;
+
+const batInput = () => { const i = defaultInput(); i.accessory = { wingspan: 150, cloakLen: 90, neckOpen: 44, shoulders: 42, hoodDepth: 36 }; return i; };
 
 const tightsInput = () => { const i = defaultInput(); i.accessory = { thigh: 56, ankle: 24, inseam: 70, rise: 27 }; return i; };
 
@@ -444,7 +446,9 @@ test("no shaping round anywhere leaves a leftover tail or degenerate count", () 
         inp.body.waist = waist;
         inp.gauges.hdc = { sts: st, rows: rw, width: 10, height: 10 };
         inp.gauges.sc = { sts: st + 2, rows: rw + 6, width: 10, height: 10 };
-        for (const gen of [computePattern, computeHat, computeBag, computeTights]) {
+        inp.accessory = { thigh: 56, ankle: 24, inseam: 70, rise: 27,
+          wingspan: 110 + waist, cloakLen: 80, neckOpen: 44, shoulders: 42, hoodDepth: 36 };
+        for (const gen of [computePattern, computeHat, computeBag, computeTights, computeBatCloak]) {
           let res;
           try { res = gen(inp); } catch (e) { bad.push(`${gen.name} crashed @${waist}/${st}/${rw}: ${e.message}`); continue; }
           for (const p of res.pieces) for (const s of p.steps || []) {
@@ -483,6 +487,47 @@ test("bag produces a bucket-bag set tagged kind:bag", () => {
   const r = computeBag(DEFAULT_INPUT);
   assert.equal(r.meta.kind, "bag");
   assert.deepEqual(r.pieces.map((p) => p.id), ["base", "sides", "spots", "band", "strap"]);
+});
+
+test("bat cloak produces a hooded-cape set tagged kind:batcloak", () => {
+  const r = computeBatCloak(batInput());
+  assert.equal(r.meta.kind, "batcloak");
+  assert.equal(r.meta.spots, false);
+  assert.deepEqual(r.pieces.map((p) => p.id), ["yoke", "wings", "membrane", "hood", "ears", "finishing"]);
+});
+
+test("bat cloak hem points divide the hem exactly (no half-point at the join)", () => {
+  for (let span = 110; span <= 200; span += 10) {
+    const inp = batInput();
+    inp.accessory.wingspan = span;
+    const m = computeBatCloak(inp).pieces.find((p) => p.id === "membrane");
+    assert.equal(m.counts.hemSts % m.counts.pointWidth, 0, `span ${span}`);
+    assert.equal(m.counts.points, m.counts.hemSts / m.counts.pointWidth, `span ${span}`);
+    assert.ok(m.counts.points >= 3, `span ${span}`);
+  }
+});
+
+test("bat cloak progress reaches its target exactly and stays in bounds", () => {
+  for (const p of computeBatCloak(batInput()).pieces) {
+    if (!p.progress) continue;
+    assert.ok(p.progress.total >= 1, p.id);
+    for (const it of p.progress.incRounds) assert.ok(it.rnd >= 1 && it.rnd <= p.progress.total, p.id);
+    assert.equal(walkProgressEnd(p), p.progress.end, p.id);
+  }
+});
+
+test("bat cloak charges no phantom polka-spot yarn", () => {
+  const y = estimateYarn(computeBatCloak(batInput()));
+  assert.equal(y.byColor.spot.meters, 0);
+  assert.ok(!y.pieces.some((p) => p.id === "spots"));
+  assert.ok(y.byColor.body.meters > 0 && y.total.meters > 0);
+});
+
+test("bat cloak viz renders well-formed SVG", () => {
+  const inp = batInput();
+  const svg = Viz.renderBatCloakSvg(computeBatCloak(inp), inp);
+  assert.ok(svg.startsWith("<svg") && svg.endsWith("</svg>"));
+  assert.ok(svg.includes("bat cloak"));
 });
 
 test("accessory shaping reaches its target exactly and stays in bounds", () => {

@@ -910,6 +910,155 @@ var CrochetCore = (function () {
     };
   }
 
+  // ---- BAT CLOAK: a hooded cape with pointed "membrane" wings. Worked flat and
+  // top-down in one open-front piece — neck → shoulders (yoke), then a wide drape
+  // that flares to the hem (the wing membrane) finished with pointed spikes — plus
+  // a shaped hood with two ears, and thumb loops that pull the drape into wings
+  // when the arms spread. A different silhouette from the mushroom set, but built
+  // from the same primitives, so the shaping stays clean and tail-free. ----
+  function computeBatCloak(input) {
+    input = input || {};
+    var u = input.unit || "cm";
+    var C = Object.assign({}, DEFAULT_INPUT.colors, input.colors || {});
+    var G = Object.assign({}, DEFAULT_INPUT.gauges, input.gauges || {});
+    var A = input.accessory || {};
+    var hdc = density(G.hdc, u), sc = density(G.sc, u), rib = density(G.rib, u);
+    var H = function (cm) { return r1(fromCm(cm, u)) + " " + u; };
+    var mapC = function (rounds) { return rounds.map(function (x) { return { rnd: x.rnd, count: x.after }; }); };
+
+    var wingspan  = toCm(A.wingspan  != null ? A.wingspan  : 150, u); // fingertip → fingertip drape
+    var length    = toCm(A.cloakLen  != null ? A.cloakLen  : 90,  u); // nape → hem
+    var neck      = toCm(A.neckOpen  != null ? A.neckOpen  : 44,  u); // neck opening (worked flat, open front)
+    var shoulders = toCm(A.shoulders != null ? A.shoulders : 42,  u); // across the back
+    var hoodDepth = toCm(A.hoodDepth != null ? A.hoodDepth : 36,  u); // chin → crown of the hood
+
+    var warnings = [], pieces = [];
+
+    // 1. Yoke — the neck edge flaring over the shoulders (flat, in rows). Land both
+    // the neck and shoulder counts on nice, well-divisored numbers so the wing flare
+    // below can increase in clean chunks (and the hood picks up the same neck count).
+    var neckRaw = even(jsround(neck * hdc.st));
+    var neckSts = niceCount(neckRaw, 0, neckRaw - 4, neckRaw + 4);
+    var shoulderRaw = even(jsround(shoulders * hdc.st * 1.7)); // laid flat, the cape arc is wider than the back
+    var shoulderSts = niceCount(shoulderRaw, neckSts, shoulderRaw - 6, shoulderRaw + 6);
+    var yokeDepth = Math.min(toCm(22, u), length * 0.28);
+    var yokeRows = Math.max(6, jsround(yokeDepth * hdc.row));
+    var yokePlan = incPlan(neckSts, shoulderSts, yokeRows, "hdc", 1, 0.09);
+    pieces.push({
+      id: "yoke", title: "Shoulder yoke", stitch: "flat, top-down · hdc",
+      counts: { start: neckSts, end: yokePlan.finalCount, rows: yokeRows, neckOpening: neck },
+      progress: { total: yokeRows, start: neckSts, end: yokePlan.finalCount, incRounds: mapC(yokePlan.rounds), unit: "Row" },
+      yarn: { g: "hdc", color: "body" },
+      steps: [
+        ["Foundation (neckline)", "In " + C.body + ", ch " + (neckSts + 2) + ". Row 1: hdc in 3rd ch from hook and each ch across. (" + neckSts + " hdc). This top edge is the neckline; the cloak stays open down the front."],
+        ["Flare the shoulders", "Turn each row. Increase on the rows below to flare from the neck across the shoulders to " + yokePlan.finalCount + " hdc over ~" + H(yokeDepth) + "."],
+      ].concat(yokePlan.rounds.map(function (x) { return ["Row " + x.rnd, "Ch 2, turn, " + x.text + ". (" + x.after + " hdc)"]; }))
+        .concat([["Into the wings", "Work even to Row " + yokeRows + ". (" + yokePlan.finalCount + " hdc)"]]),
+    });
+
+    // 2. Wings — the shoulders flaring out to the full hem drape (flat, in rows).
+    // The hem span is the wingspan: hold the front edges out and this membrane fills
+    // the space between your arms.
+    var hemSts = even(jsround(wingspan * hdc.st));
+    var bodyRows = Math.max(8, jsround((length - yokeDepth) * hdc.row));
+    var wingPlan = incPlan(yokePlan.finalCount, hemSts, bodyRows, "hdc", 1, 0.05);
+    pieces.push({
+      id: "wings", title: "Wing membrane", stitch: "flat, top-down · hdc",
+      counts: { start: yokePlan.finalCount, end: wingPlan.finalCount, rows: bodyRows, hemSpan: wingspan },
+      progress: { total: bodyRows, start: yokePlan.finalCount, end: wingPlan.finalCount, incRounds: mapC(wingPlan.rounds), unit: "Row" },
+      yarn: { g: "hdc", color: "body" },
+      steps: [
+        ["Continue from the yoke", "Keep working in rows straight on from the yoke — this widening drape is the wing membrane. Increase to " + wingPlan.finalCount + " hdc at the hem, a span of about " + H(wingspan) + "."],
+      ].concat(wingPlan.rounds.map(function (x) { return ["Row " + x.rnd, "Ch 2, turn, " + x.text + ". (" + x.after + " hdc)"]; }))
+        .concat([["Hem", "Work even to Row " + bodyRows + ", ending with " + wingPlan.finalCount + " hdc across the hem. (" + wingPlan.finalCount + " hdc)"]]),
+    });
+
+    // 3. Membrane points — pointed spikes along the hem (a bat wing's trailing edge).
+    // Pick a point width that divides the hem exactly so no half-point is left at the
+    // end. Each point is a triangle worked over one group, decreasing to a tip.
+    var ptTarget = Math.max(4, jsround(9 * hdc.st));   // ~9 cm base per point
+    var ptW = ptTarget, bestPt = Infinity;
+    for (var d = 4; d <= Math.floor(hemSts / 3); d++) {
+      if (hemSts % d) continue;
+      var dd = Math.abs(d - ptTarget);
+      if (dd < bestPt) { bestPt = dd; ptW = d; }
+    }
+    var nPoints = hemSts / ptW;
+    var ptRows = Math.max(2, Math.ceil((ptW - 2) / 2));
+    // yarn: each point is roughly a triangle of ptW·ptRows/2 sts
+    var membraneSts = nPoints * jsround(ptW * ptRows / 2);
+    pieces.push({
+      id: "membrane", title: "Wing points (hem)", stitch: "flat triangles · hdc",
+      counts: { hemSts: hemSts, points: nPoints, pointWidth: ptW },
+      yarn: { g: "hdc", color: "body", sts: membraneSts },
+      steps: [
+        ["Set-up", "The hem has " + hemSts + " hdc. You'll finish it with " + nPoints + " pointed spikes — the trailing edge of a bat wing — each worked over a group of " + ptW + " sts."],
+        ["One point", "In " + C.body + ", starting at a hem corner: hdc across the next " + ptW + " sts, ch 2, turn. Next row: hdc2tog, hdc to the last 2 sts, hdc2tog, ch 2, turn. Repeat, losing one st at each end every row, until 2–3 sts remain; fasten off to a sharp tip."],
+        ["Repeat across", "Rejoin at the next group of " + ptW + " sts and make the next point. Work all " + nPoints + " points across the hem."],
+        ["Sharpen", "Wet-block each point to a crisp triangle — sharp points are what make the hem read as wings, not a ruffle."],
+      ],
+    });
+
+    // 4. Hood — picked up along the back neck, rising over the head, seamed at the crown.
+    var hoodBase = neckSts;
+    var hoodRows = Math.max(8, jsround(hoodDepth * hdc.row));
+    pieces.push({
+      id: "hood", title: "Hood", stitch: "flat, bottom-up · hdc",
+      counts: { base: hoodBase, rows: hoodRows, depth: hoodDepth },
+      progress: { total: hoodRows, start: hoodBase, end: hoodBase, incRounds: [], unit: "Row" },
+      yarn: { g: "hdc", color: "body" },
+      steps: [
+        ["Pick up", "With the cloak right-side up, along the neckline (the top edge of the yoke) pick up " + hoodBase + " hdc in " + C.body + " across the back-neck section, leaving the front few sts each side free for the closure."],
+        ["Rise", "Ch 2, turn, hdc in each st across; rep to Row " + hoodRows + ". The hood rises straight up over about " + H(hoodDepth) + ". (" + hoodBase + " hdc)"],
+        ["Close the crown", "Fold the last row in half, right sides together, and seam (or sc) the two halves to shape the back of the hood."],
+        ["Face edge", "Work 1 row of sc around the front opening so the face edge sits neatly."],
+      ],
+    });
+
+    // 5. Ears (make 2) — an outer triangle with a smaller inner triangle in the accent.
+    var earBase = Math.max(6, even(jsround(9 * sc.st)));
+    var earIn = Math.max(4, earBase - 4);
+    var earSts = jsround(earBase * earBase / 4);
+    var earInSts = jsround(earIn * earIn / 4);
+    pieces.push({
+      id: "ears", title: "Bat ears (make 2)", stitch: "flat triangles · sc", makeCount: 2,
+      counts: { base: earBase, innerBase: earIn },
+      yarn: { g: "sc", color: "body", sts: earSts },
+      extraYarn: [{ g: "sc", color: "cap", sts: earInSts, title: "Ear inners (accent)" }],
+      steps: [
+        ["Outer", "Make 2. In " + C.body + ", ch " + (earBase + 1) + "; sc across (" + earBase + " sc). Then decrease one st at each end every row (sc2tog, sc to the last 2 sts, sc2tog) until ~2 sts remain; fasten off to a point."],
+        ["Inner", "For each ear make a smaller triangle the same way in " + C.cap + " (start " + earIn + " sc). Layer it on the front of the outer ear for a two-tone ear."],
+        ["Attach", "Sew the ears upright to the top of the hood, spaced apart and angled slightly outward like a bat's. Slip a little stuffing or a length of wire into the seam if you want them to stand up."],
+      ],
+    });
+
+    // 6. Finishing — the wing trick (thumb loops), neck closure, blocking.
+    var loopCh = Math.max(10, jsround(8 * sc.st));
+    pieces.push({
+      id: "finishing", title: "Wings & closure", stitch: "loops, ties, blocking",
+      counts: {},
+      yarn: { g: "sc", color: "cap", sts: 2 * loopCh + 40 },
+      steps: [
+        ["Thumb loops (the wing trick)", "At each lower front corner — the point that falls near your wrist when the cloak is on — join " + C.cap + " and ch " + loopCh + ", then sl st back into the corner to make a loop. Slip a loop over each thumb: now when you spread your arms, the hem drape pulls taut into wings."],
+        ["Neck closure", "At the two top front corners add a button-and-loop or a pair of ch ties in " + C.cap + " to fasten the cloak at the throat."],
+        ["Block", "Wet-block the whole cloak, pinning the hem points sharp. Try it on and spread your arms to check the wing drape before you weave in the ends."],
+      ],
+    });
+
+    if (wingspan < 120) warnings.push("Wingspan looks short for a dramatic wing — measure fingertip to fingertip with your arms spread, not shoulder to shoulder.");
+    if (neckSts < 20) warnings.push("Neck opening looks small — double-check the measurement and your hdc gauge.");
+    warnings.push("Try the cloak on before the hem points and hood — drape sits differently on the body, and you may want it longer or wider for a bigger wingspan.");
+
+    return {
+      pieces: pieces, warnings: warnings,
+      meta: {
+        unit: u, kind: "batcloak", spots: false, density: { rib: rib, hdc: hdc, sc: sc }, colors: C,
+        wingspan: wingspan, length: length, neckOpen: neck, hemSpan: wingspan,
+        points: nPoints, hoodDepth: hoodDepth,
+      },
+    };
+  }
+
   function estimateYarn(result) {
     var meta = result.meta, dens = meta.density, colors = meta.colors;
     var waste = 1.12, yd = 1.0936;
@@ -962,9 +1111,14 @@ var CrochetCore = (function () {
         piecesOut.push({ id: p.id + ":" + ex.g, title: ex.title || (p.title + " (extra)"), color: ex.color, meters: Math.round(xcm / 100 * 10) / 10, yards: Math.round(xcm / 100 * yd * 10) / 10 });
       });
     });
-    var spotCm = spottedCm * 0.15;
-    colorCm.spot += spotCm;
-    piecesOut.push({ id: "spots", title: "Polka spots", color: "spot", meters: Math.round(spotCm / 100 * 10) / 10, yards: Math.round(spotCm / 100 * yd * 10) / 10 });
+    // Polka spots are an overlay on the cap-coloured areas — only the mushroom set
+    // has them. A generator can opt out (meta.spots === false) so it isn't charged
+    // for spot yarn it never uses.
+    if (meta.spots !== false) {
+      var spotCm = spottedCm * 0.15;
+      colorCm.spot += spotCm;
+      piecesOut.push({ id: "spots", title: "Polka spots", color: "spot", meters: Math.round(spotCm / 100 * 10) / 10, yards: Math.round(spotCm / 100 * yd * 10) / 10 });
+    }
     var totalCm = colorCm.cap + colorCm.body + colorCm.spot;
     var byColor = {};
     ["cap", "body", "spot"].forEach(function (k) {
@@ -995,7 +1149,7 @@ var CrochetCore = (function () {
     even: even, mult: mult, density: density, incPlan: incPlan, evenAdjust: evenAdjust,
     spotChart: spotChart, spotCharts: spotCharts, DEFAULT_INPUT: DEFAULT_INPUT, defaultInput: defaultInput,
     computePattern: computePattern, computeHat: computeHat, computeBag: computeBag,
-    computeTights: computeTights, decPlan: decPlan,
+    computeTights: computeTights, computeBatCloak: computeBatCloak, decPlan: decPlan,
     estimateYarn: estimateYarn, convertTerms: convertTerms
   };
 })();
