@@ -55,6 +55,9 @@ body[data-studio-theme="bat"]{
   --sh-btn:0 2px 5px rgba(157,31,45,.5),0 8px 18px -6px rgba(157,31,45,.55);
 }
 *{box-sizing:border-box;}
+/* the [hidden] attribute must always win — otherwise an element with its own
+   display rule (.crow, .two, .rowctl, .btn…) stays visible when we hide it */
+[hidden]{display:none!important;}
 html,body{margin:0;padding:0;}
 body{
   font-family:'Plus Jakarta Sans','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
